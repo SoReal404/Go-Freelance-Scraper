@@ -1,0 +1,19 @@
+{
+  "name": "go-freelance-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test:mostaql-time": "node --experimental-strip-types --test adapters/mostaql.test.ts",
+    "test:batch2": "node --experimental-strip-types --test adapters/shoghlonline.test.ts adapters/nafezly.test.ts adapters/freelance-arabs.test.ts adapters/listing-tracker.test.ts",
+    "spike:mostaql": "node --experimental-strip-types spike/mostaql-scrape-spike.mjs",
+    "spike:batch2": "node --experimental-strip-types spike/batch2-scrape-spike.mjs"
+  },
+  "dependencies": {
+    "cheerio": "^1.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "typescript": "^5.9.2"
+  }
+}

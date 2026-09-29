@@ -1,0 +1,7 @@
+{"event":"spike_started","platforms":["shoghlonline","nafezly","freelance-arabs"],"started_at":"2026-09-29T20:50:16.119Z","duration_hours":12,"log_file":"batch2-live-2026-09-29T20-50-16-119Z.jsonl","note":"Initial listing is the baseline. New IDs are detected from public listing pages; no project detail pages are fetched."}
+{"event":"poll","platform":"nafezly","poll":1,"baseline":true,"rows":20,"projects":20,"parse_errors":0,"url":"https://nafezly.com/projects"}
+{"event":"blocked","platform":"shoghlonline","poll":1,"status":200,"detail":"Challenge/CAPTCHA marker detected; polling stopped without bypass."}
+{"event":"poll","platform":"freelance-arabs","poll":1,"baseline":true,"rows":10,"projects":10,"parse_errors":0,"url":"https://arabsfreelancer.com/projects/"}
+{"event":"poll","platform":"freelance-arabs","poll":2,"baseline":false,"rows":10,"projects":10,"parse_errors":0,"url":"https://arabsfreelancer.com/projects/"}
+{"event":"poll","platform":"nafezly","poll":2,"baseline":false,"rows":20,"projects":20,"parse_errors":0,"url":"https://nafezly.com/projects"}
+{"event":"poll","platform":"freelance-arabs","poll":3,"baseline":false,"rows":10,"projects":10,"parse_errors":0,"url":"https://arabsfreelancer.com/projects/"}
