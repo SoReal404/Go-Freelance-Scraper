@@ -1,27 +1,43 @@
-/**
- * Temporary worker-local contracts. The initial workspace has no
- * packages/shared yet; move these definitions there when that package lands.
- */
+export type PlatformId =
+  | 'freelancer'
+  | 'upwork'
+  | 'peopleperhour'
+  | 'guru'
+  | 'mostaql'
+  | 'khamsat'
+  | 'shoghlonline'
+  | 'nafezly'
+  | 'freelance-arabs';
+
+export type PlatformRegion = 'middle-east' | 'international';
+
 export interface NormalizedProject {
-  platform: string;
+  platform: PlatformId;
   externalId: string;
   title: string;
   description: string;
+  listingDescription?: string;
   url: string;
   budgetMin?: number;
   budgetMax?: number;
   currency?: string;
   budgetType?: 'fixed' | 'hourly';
   skills: string[];
+  category?: string;
+  subCategory?: string;
   language?: string;
   postedAt: Date;
+  firstSeenAt?: Date;
+  detailsEnriched?: boolean;
   raw?: unknown;
 }
 
 export interface PlatformAdapter {
-  id: 'freelancer' | 'upwork' | 'peopleperhour' | 'mostaql' | 'khamsat' |
-    'shoghlonline' | 'nafezly' | 'freelance-arabs';
+  id: PlatformId;
+  name: string;
+  region: PlatformRegion;
   pollIntervalMs: number;
   fetchNewProjects(since: Date): Promise<NormalizedProject[]>;
+  enrichProject?(project: NormalizedProject): Promise<NormalizedProject>;
   healthCheck(): Promise<{ ok: boolean; detail?: string }>;
 }

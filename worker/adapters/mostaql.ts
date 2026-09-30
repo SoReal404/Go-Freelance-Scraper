@@ -131,8 +131,77 @@ function isChallengePage(html: string): boolean {
     /challenge-platform|cf-challenge|cf-chl-|hcaptcha-challenge/i.test(html);
 }
 
+export function parseMostaqlBudgetFromText(text: string): { budgetMin?: number; budgetMax?: number; currency?: string } {
+  const match = text.match(/\$?(\d+(?:\.\d+)?)\s*(?:-|–|إلى)\s*\$?(\d+(?:\.\d+)?)/);
+  if (match) {
+    return {
+      budgetMin: Number(match[1]),
+      budgetMax: Number(match[2]),
+      currency: 'USD',
+    };
+  }
+  const single = text.match(/\$?(\d+(?:\.\d+)?)/);
+  if (single) {
+    const val = Number(single[1]);
+    return { budgetMin: val, budgetMax: val, currency: 'USD' };
+  }
+  return {};
+}
+
+export async function enrichMostaqlProjectDetail(project: NormalizedProject): Promise<NormalizedProject> {
+  if (!project.url) return project;
+  try {
+    const response = await fetch(project.url, {
+      headers: { 'User-Agent': MOSTAQL_USER_AGENT },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return project;
+
+    const html = await response.text();
+    const $ = load(html);
+
+    // Full description
+    const fullDesc = $('div.text-wrapper-div.carda__content, div.project__description')
+      .first()
+      .text()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Skills
+    const skills = $('ul.skills__list li, .skills a, a[href*="/skills/"], .tag')
+      .toArray()
+      .map((el) => $(el).text().replace(/\s+/g, ' ').trim())
+      .filter((s) => s && s.length > 1 && s.length < 50);
+    const uniqueSkills = [...new Set([...project.skills, ...skills])];
+
+    // Budget from project meta
+    let budget = { budgetMin: project.budgetMin, budgetMax: project.budgetMax, currency: project.currency };
+    const metaCardText = $('.carda__body, table.table--meta, dl.project__details').text().replace(/\s+/g, ' ').trim();
+    const budgetMatch = metaCardText.match(/الميزانية\s*(\$?\d[\d.,\s–-]+\$?)/);
+    if (budgetMatch) {
+      const parsedBudget = parseMostaqlBudgetFromText(budgetMatch[1]);
+      if (parsedBudget.budgetMin != null) {
+        budget = { ...budget, ...parsedBudget };
+      }
+    }
+
+    return {
+      ...project,
+      description: fullDesc && fullDesc.length >= project.description.length ? fullDesc : project.description,
+      listingDescription: project.description,
+      skills: uniqueSkills,
+      ...budget,
+      detailsEnriched: Boolean(fullDesc || uniqueSkills.length > 0),
+    };
+  } catch {
+    return project;
+  }
+}
+
 export const mostaqlAdapter: PlatformAdapter = {
   id: 'mostaql',
+  name: 'Mostaql',
+  region: 'middle-east',
   pollIntervalMs: 60_000,
 
   async fetchNewProjects(since: Date): Promise<NormalizedProject[]> {
@@ -146,6 +215,10 @@ export const mostaqlAdapter: PlatformAdapter = {
     const parsed = parseMostaqlProjects(response.html);
     if (!parsed.rowCount) throw new Error('Mostaql project-row selector returned no rows.');
     return parsed.projects.filter((project) => project.postedAt >= since);
+  },
+
+  async enrichProject(project: NormalizedProject): Promise<NormalizedProject> {
+    return enrichMostaqlProjectDetail(project);
   },
 
   async healthCheck(): Promise<{ ok: boolean; detail?: string }> {
@@ -162,3 +235,4 @@ export const mostaqlAdapter: PlatformAdapter = {
     }
   },
 };
+

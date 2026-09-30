@@ -91,8 +91,48 @@ export async function fetchShoghlonlineHtml(): Promise<{ status: number; url: st
 const challengePattern = /cf-challenge|cf-chl-|cf_chl_opt|challenge-form|hcaptcha-challenge|verify you are human|just a moment|access denied/i;
 const trackNewListings = createNewListingTracker();
 
+export async function enrichShoghlonlineProjectDetail(project: NormalizedProject): Promise<NormalizedProject> {
+  if (!project.url) return project;
+  try {
+    const response = await fetch(project.url, {
+      headers: { 'User-Agent': SHOGHLONLINE_USER_AGENT, Accept: 'text/html,application/xhtml+xml,*/*;q=0.8' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return project;
+
+    const html = await response.text();
+    const $ = load(html);
+
+    const desc = $('main article, main div.prose, [itemprop="description"], p.mt-4')
+      .first()
+      .text()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const skills = $('div.flex.flex-wrap span, .badge, .tag')
+      .toArray()
+      .map((el) => $(el).text().replace(/\s+/g, ' ').trim())
+      .filter((s) => s && s.length > 1 && s.length < 50);
+
+    const uniqueSkills = [...new Set([...project.skills, ...skills])];
+    const fullDesc = desc && desc.length >= project.description.length ? desc : project.description;
+
+    return {
+      ...project,
+      description: fullDesc,
+      listingDescription: project.description,
+      skills: uniqueSkills,
+      detailsEnriched: Boolean(fullDesc || uniqueSkills.length > 0),
+    };
+  } catch {
+    return project;
+  }
+}
+
 export const shoghlonlineAdapter: PlatformAdapter = {
   id: 'shoghlonline',
+  name: 'Shoghlonline',
+  region: 'middle-east',
   pollIntervalMs: 60_000,
   async fetchNewProjects(since) {
     const response = await fetchShoghlonlineHtml();
@@ -103,6 +143,9 @@ export const shoghlonlineAdapter: PlatformAdapter = {
     const parsed = parseShoghlonlineProjects(response.html);
     if (!parsed.rowCount) throw new Error('Shoghlonline job-card selector returned no rows.');
     return trackNewListings(parsed.projects, since);
+  },
+  async enrichProject(project: NormalizedProject): Promise<NormalizedProject> {
+    return enrichShoghlonlineProjectDetail(project);
   },
   async healthCheck() {
     try {
@@ -118,3 +161,4 @@ export const shoghlonlineAdapter: PlatformAdapter = {
     }
   },
 };
+

@@ -4,10 +4,15 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test:mostaql-time": "node --experimental-strip-types --test adapters/mostaql.test.ts",
+    "test": "node --experimental-strip-types --test adapters/mostaql.test.ts adapters/nafezly.test.ts adapters/shoghlonline.test.ts adapters/freelance-arabs.test.ts adapters/listing-tracker.test.ts adapters/freelancer.test.ts adapters/peopleperhour.test.ts adapters/upwork.test.ts adapters/guru.test.ts",
+    "start": "node --experimental-strip-types cli.ts --watch",
+    "scrape": "node --experimental-strip-types cli.ts --once",
+    "scrape:me": "node --experimental-strip-types cli.ts --region=middle-east --once",
+    "scrape:int": "node --experimental-strip-types cli.ts --region=international --once",
+    "health": "node --experimental-strip-types cli.ts --health",
+    "stats": "node --experimental-strip-types cli.ts --stats",
     "test:batch2": "node --experimental-strip-types --test adapters/shoghlonline.test.ts adapters/nafezly.test.ts adapters/freelance-arabs.test.ts adapters/listing-tracker.test.ts",
-    "spike:mostaql": "node --experimental-strip-types spike/mostaql-scrape-spike.mjs",
-    "spike:batch2": "node --experimental-strip-types spike/batch2-scrape-spike.mjs"
+    "test:mostaql-time": "node --experimental-strip-types --test adapters/mostaql.test.ts"
   },
   "dependencies": {
     "cheerio": "^1.1.2"

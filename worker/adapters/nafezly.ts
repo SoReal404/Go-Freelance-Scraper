@@ -114,8 +114,48 @@ export async function fetchNafezlyHtml(): Promise<{ status: number; url: string;
 const challengePattern = /cf-challenge|cf-chl-|cf_chl_opt|challenge-form|hcaptcha-challenge|verify you are human|just a moment|access denied/i;
 const trackNewListings = createNewListingTracker();
 
+export async function enrichNafezlyProjectDetail(project: NormalizedProject): Promise<NormalizedProject> {
+  if (!project.url) return project;
+  try {
+    const response = await fetch(project.url, {
+      headers: { 'User-Agent': NAFEZLY_USER_AGENT, Accept: 'text/html,application/xhtml+xml,*/*;q=0.8' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return project;
+
+    const html = await response.text();
+    const $ = load(html);
+
+    // In Nafezly, h2 contains the full project requirements description
+    const h2Text = $('h2').first().text().replace(/\s+/g, ' ').trim();
+    const ogDesc = $('meta[property="og:description"]').attr('content')?.replace(/\s+/g, ' ').trim() || '';
+    const candidates = [h2Text, ogDesc, project.description].filter((t) => t && t.length > 20);
+    candidates.sort((a, b) => b.length - a.length);
+    const fullDesc = candidates[0] || project.description;
+
+    // Skills
+    const skills = $('.tags a, .tag, a[href*="/skill/"]')
+      .toArray()
+      .map((el) => $(el).text().replace(/\s+/g, ' ').trim())
+      .filter((s) => s && s.length > 1 && s.length < 50);
+    const uniqueSkills = [...new Set([...project.skills, ...skills])];
+
+    return {
+      ...project,
+      description: fullDesc,
+      listingDescription: project.description,
+      skills: uniqueSkills,
+      detailsEnriched: Boolean(fullDesc.length > project.description.length || uniqueSkills.length > 0),
+    };
+  } catch {
+    return project;
+  }
+}
+
 export const nafezlyAdapter: PlatformAdapter = {
   id: 'nafezly',
+  name: 'Nafezly',
+  region: 'middle-east',
   pollIntervalMs: 60_000,
   async fetchNewProjects(since) {
     const response = await fetchNafezlyHtml();
@@ -126,6 +166,9 @@ export const nafezlyAdapter: PlatformAdapter = {
     const parsed = parseNafezlyProjects(response.html);
     if (!parsed.rowCount) throw new Error('Nafezly project-box selector returned no rows.');
     return trackNewListings(parsed.projects, since);
+  },
+  async enrichProject(project: NormalizedProject): Promise<NormalizedProject> {
+    return enrichNafezlyProjectDetail(project);
   },
   async healthCheck() {
     try {
@@ -141,3 +184,4 @@ export const nafezlyAdapter: PlatformAdapter = {
     }
   },
 };
+

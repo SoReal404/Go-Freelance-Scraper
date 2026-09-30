@@ -5,7 +5,7 @@ import type { NormalizedProject } from './types.ts';
 
 function project(externalId: string, postedAt: string): NormalizedProject {
   return {
-    platform: 'test', externalId, title: externalId, description: '', url: `https://example.test/${externalId}`,
+    platform: 'mostaql', externalId, title: externalId, description: '', url: `https://example.test/${externalId}`,
     skills: [], postedAt: new Date(postedAt),
   };
 }

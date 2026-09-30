@@ -87,6 +87,8 @@ const trackNewListings = createNewListingTracker();
 
 export const freelanceArabsAdapter: PlatformAdapter = {
   id: 'freelance-arabs',
+  name: 'FreelanceArabs',
+  region: 'middle-east',
   pollIntervalMs: 60_000,
   async fetchNewProjects(since) {
     const response = await fetchFreelanceArabsHtml();

@@ -1,1 +1,7 @@
 node_modules/
+*.lock
+*.tmp
+.env
+data/run-logs/
+data/projects.json
+data/*.csv
