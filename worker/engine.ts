@@ -2,6 +2,7 @@ import type { PlatformAdapter, NormalizedProject } from './adapters/types.ts';
 import { allAdapters, getAdapter, getAdaptersByRegion } from './adapters/index.ts';
 import { enrichProjectDetails } from './enricher/detail-enricher.ts';
 import { ProjectStore, defaultStore } from './storage/project-store.ts';
+import { upsertProjectToSupabase } from './storage/supabase-store.ts';
 
 export interface ScraperEngineOptions {
   adapters?: PlatformAdapter[];
@@ -30,8 +31,8 @@ export class ScraperEngine {
     this.adapters = options.adapters || allAdapters;
     this.store = options.store || defaultStore;
     this.enrichDetails = options.enrichDetails ?? true;
-    this.minPacingGapMs = options.minPacingGapMs ?? 3000;
-    this.maxPacingGapMs = options.maxPacingGapMs ?? 6000;
+    this.minPacingGapMs = options.minPacingGapMs ?? 5_000;   // min 5s between platform requests
+    this.maxPacingGapMs = options.maxPacingGapMs ?? 10_000;  // max 10s jitter
     this.onNewProject = options.onNewProject;
     this.onLog = options.onLog || ((ev) => console.log(JSON.stringify(ev)));
   }
@@ -90,9 +91,10 @@ export class ScraperEngine {
               url: project.url,
             });
 
-            // Enrich with full description, skills, and budget if requested
+            // Enrich with full description, skills, and budget if requested.
+            // 2-second pause before each detail-page fetch to stay well under rate limits.
             if (this.enrichDetails && !project.detailsEnriched) {
-              await this.paceRequest(adapter.id);
+              await pause(2000 + Math.random() * 1000);
               project = await enrichProjectDetails(project);
               if (project.detailsEnriched) {
                 enrichedCount += 1;
@@ -100,6 +102,8 @@ export class ScraperEngine {
             }
 
             await this.store.upsert(project);
+            // Sync to Supabase (no-op if env vars not set)
+            upsertProjectToSupabase(project).catch(() => {/* already logged inside */});
 
             if (this.onNewProject) {
               try {
@@ -149,8 +153,8 @@ export class ScraperEngine {
 
     while (this.isRunning && !stopSignal?.aborted) {
       await this.runSingleCycle();
-      // Wait between full cycles
-      await pause(15_000);
+      // Wait 60 seconds between full cycles — each platform polled at most once per minute
+      await pause(60_000);
     }
 
     this.onLog({ event: 'engine_stopped', at: new Date().toISOString() });

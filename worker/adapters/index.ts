@@ -5,8 +5,7 @@ import { shoghlonlineAdapter } from './shoghlonline.ts';
 import { freelanceArabsAdapter } from './freelance-arabs.ts';
 import { freelancerAdapter } from './freelancer.ts';
 import { peoplePerHourAdapter } from './peopleperhour.ts';
-import { upworkAdapter } from './upwork.ts';
-import { guruAdapter } from './guru.ts';
+// Upwork and Guru removed — require paid credentials / WAF bypass not worth the block risk
 
 export * from './types.ts';
 export * from './listing-tracker.ts';
@@ -16,8 +15,6 @@ export * from './shoghlonline.ts';
 export * from './freelance-arabs.ts';
 export * from './freelancer.ts';
 export * from './peopleperhour.ts';
-export * from './upwork.ts';
-export * from './guru.ts';
 
 export const allAdapters: PlatformAdapter[] = [
   // Middle East Marketplaces
@@ -29,8 +26,6 @@ export const allAdapters: PlatformAdapter[] = [
   // International Marketplaces
   freelancerAdapter,
   peoplePerHourAdapter,
-  upworkAdapter,
-  guruAdapter,
 ];
 
 export const adaptersById = new Map<PlatformId, PlatformAdapter>(

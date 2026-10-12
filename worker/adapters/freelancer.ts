@@ -126,7 +126,7 @@ export function createFreelancerAdapter(
     id: 'freelancer',
     name: 'Freelancer.com',
     region: 'international',
-    pollIntervalMs: 30_000,
+    pollIntervalMs: 60_000,
 
     async fetchNewProjects(since: Date): Promise<NormalizedProject[]> {
       const token = getToken();

@@ -142,7 +142,7 @@ export const peoplePerHourAdapter: PlatformAdapter = {
   id: 'peopleperhour',
   name: 'PeoplePerHour',
   region: 'international',
-  pollIntervalMs: 45_000,
+  pollIntervalMs: 90_000,
 
   async fetchNewProjects(since: Date): Promise<NormalizedProject[]> {
     const { status, html } = await fetchPphHtml();
