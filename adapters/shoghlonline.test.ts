@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { parseShoghlonlineProjects, parseShoghlonlineRelativeTime } from './shoghlonline.ts';
@@ -11,8 +12,10 @@ test('parses captured Shoghlonline relative labels', () => {
   assert.equal(parseShoghlonlineRelativeTime('قبل 11 شهرًا', seenAt)?.getUTCMonth(), 10);
 });
 
-test('parses public Shoghlonline cards with description and named skills', async () => {
-  const html = await readFile(new URL('../spike/samples/shoghlonline-listing.html', import.meta.url), 'utf8');
+const FIXTURE = new URL('../spike/samples/shoghlonline-listing.html', import.meta.url);
+// The saved sample page is not committed (third-party HTML); the test only runs where the file exists.
+test('parses public Shoghlonline cards with description and named skills', { skip: !existsSync(FIXTURE) && 'sample HTML not present' }, async () => {
+  const html = await readFile(FIXTURE, 'utf8');
   const parsed = parseShoghlonlineProjects(html, seenAt);
   assert.equal(parsed.rowCount, 15);
   assert.ok(parsed.projects.length > 0);

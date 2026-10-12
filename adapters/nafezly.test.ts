@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { parseNafezlyBudget, parseNafezlyProjects, parseNafezlyRelativeTime } from './nafezly.ts';
@@ -17,8 +18,10 @@ test('parses displayed project budget ranges and currency', () => {
   assert.deepEqual(parseNafezlyBudget('لا يوجد'), {});
 });
 
-test('parses public Nafezly project cards with title, description and budget', async () => {
-  const html = await readFile(new URL('../spike/samples/nafezly-listing.html', import.meta.url), 'utf8');
+const FIXTURE = new URL('../spike/samples/nafezly-listing.html', import.meta.url);
+// The saved sample page is not committed (third-party HTML); the test only runs where the file exists.
+test('parses public Nafezly project cards with title, description and budget', { skip: !existsSync(FIXTURE) && 'sample HTML not present' }, async () => {
+  const html = await readFile(FIXTURE, 'utf8');
   const parsed = parseNafezlyProjects(html, seenAt);
   assert.ok(parsed.rowCount > 0);
   assert.ok(parsed.projects.length > 0);
