@@ -174,15 +174,21 @@ export async function enrichMostaqlProjectDetail(project: NormalizedProject): Pr
       .filter((s) => s && s.length > 1 && s.length < 50);
     const uniqueSkills = [...new Set([...project.skills, ...skills])];
 
-    // Budget from project meta
+    // Budget from project meta — direct two-number capture avoids the greedy-tail bug
+    // where the old pattern ate the second "$" without the digits after it.
     let budget = { budgetMin: project.budgetMin, budgetMax: project.budgetMax, currency: project.currency };
     const metaCardText = $('.carda__body, table.table--meta, dl.project__details').text().replace(/\s+/g, ' ').trim();
-    const budgetMatch = metaCardText.match(/الميزانية\s*(\$?\d[\d.,\s–-]+\$?)/);
-    if (budgetMatch) {
-      const parsedBudget = parseMostaqlBudgetFromText(budgetMatch[1]);
-      if (parsedBudget.budgetMin != null) {
-        budget = { ...budget, ...parsedBudget };
-      }
+    const budgetRangeMatch = metaCardText.match(/الميزانية\s*\$?([\d]+(?:[\d.,]*[\d]))\s*[-–إلى]+\s*\$?([\d]+(?:[\d.,]*[\d]))/);
+    const budgetSingleMatch = budgetRangeMatch ? null : metaCardText.match(/الميزانية\s*\$?([\d]+(?:[\d.,]*[\d])?)/);
+    if (budgetRangeMatch) {
+      budget = {
+        budgetMin: Number(budgetRangeMatch[1].replace(/,/g, '')),
+        budgetMax: Number(budgetRangeMatch[2].replace(/,/g, '')),
+        currency: 'USD',
+      };
+    } else if (budgetSingleMatch) {
+      const val = Number(budgetSingleMatch[1].replace(/,/g, ''));
+      budget = { budgetMin: val, budgetMax: val, currency: 'USD' };
     }
 
     return {

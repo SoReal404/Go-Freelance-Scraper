@@ -36,6 +36,7 @@ export interface FreelancerApiProject {
   }> | null;
   submitdate?: number | null;
   time_submitted?: number | null;
+  time_updated?: number | null;
 }
 
 export function parseFreelancerProject(project: FreelancerApiProject): NormalizedProject {
@@ -57,7 +58,9 @@ export function parseFreelancerProject(project: FreelancerApiProject): Normalize
     ? [...new Set(project.jobs.map((j) => (j.name || '').trim()).filter(Boolean))]
     : [];
 
-  const rawTime = project.submitdate ?? project.time_submitted;
+  // Prefer time_updated (when the project went publicly active) over submitdate/time_submitted
+  // (when the client first submitted the form — before Freelancer review, often 12h earlier).
+  const rawTime = project.time_updated ?? project.submitdate ?? project.time_submitted;
   const postedAt = rawTime
     ? new Date(rawTime < 10_000_000_000 ? rawTime * 1000 : rawTime)
     : new Date();
@@ -89,7 +92,7 @@ export async function fetchFreelancerActiveProjects(
   token = process.env.FREELANCER_OAUTH_TOKEN || DEFAULT_FREELANCER_TOKEN,
   limit = 50,
 ): Promise<{ status: number; projects: NormalizedProject[]; rawCount: number }> {
-  const url = `${FREELANCER_API_BASE}/active/?limit=${limit}&full_description=true&job_details=true&sort_field=time_submitted&sort_direction=desc`;
+  const url = `${FREELANCER_API_BASE}/active/?limit=${limit}&full_description=true&job_details=true&sort_field=time_updated&sort_direction=desc`;
 
   const response = await fetch(url, {
     headers: {
