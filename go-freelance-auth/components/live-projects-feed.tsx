@@ -311,8 +311,8 @@ export function LiveProjectsFeed({ userSkills = [] }: { userSkills?: string[] })
           {search ? ` matching "${search}"` : ''}
         </p>
         <div className="flex items-center gap-2">
-          <span className="inline-block size-2 animate-pulse rounded-full bg-[#2bd9a3]" />
-          <span>Realtime Supabase Feed</span>
+          <span className="inline-block size-2 rounded-full bg-[#2bd9a3]" />
+          <span>Live Feed</span>
         </div>
       </div>
 
@@ -437,15 +437,14 @@ export function LiveProjectsFeed({ userSkills = [] }: { userSkills?: string[] })
                       <span>Apply</span>
                       <ExternalLink className="size-3" />
                     </a>
-                    <a
-                      href={`/bid?title=${encodeURIComponent(project.title)}&desc=${encodeURIComponent(
-                        project.description || '',
-                      )}&skills=${encodeURIComponent(project.skills.join(','))}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#2541FF] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#3854ff]"
+                    <button
+                      disabled
+                      title="AI Bid Maker is coming soon!"
+                      className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-white/10 bg-white/[.04] px-3 py-1.5 text-xs font-medium text-white/40 opacity-75"
                     >
-                      <Sparkles className="size-3" />
-                      <span>AI Bid</span>
-                    </a>
+                      <Lock className="size-3 text-white/40" />
+                      <span>AI Bid (Soon)</span>
+                    </button>
                   </div>
                 </div>
               </div>
