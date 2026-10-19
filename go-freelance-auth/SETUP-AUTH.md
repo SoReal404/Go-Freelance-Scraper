@@ -35,3 +35,12 @@ Publish the consent screen (move from Testing to In production) or only test use
 
 ## 6. Freelancer profiles and activity
 The application saves each freelancer's onboarding details, specialized profiles, skills, projects, and UTC activity dates in that user's Supabase Auth user metadata. No additional database tables or SQL setup are required. A dashboard visit records one activity date per day; the dashboard and profile calculate streaks from that saved history.
+
+## 7. Gemini AI bid generation
+Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/app/apikey), then add it to the root `.env.local` file:
+
+    GOOGLE_GEMINI_API_KEY=your-gemini-api-key
+
+Keep this key server-side: do not prefix it with `NEXT_PUBLIC_` or commit `.env.local`. Restart `pnpm dev` after adding it. The bid maker sends the project title, complete description, skills, selected language, and notes to Gemini. The server loads the signed-in user's name and all saved profile descriptions, skills, and portfolio project details from Supabase before making the request.
+
+For Vercel, add `GOOGLE_GEMINI_API_KEY` under **Project → Settings → Environment Variables**, enable it for the deployments you use, and redeploy. The name must match exactly. In Google AI Studio, make sure the key is active and restricted to the Gemini API; unrestricted standard keys may be rejected. Keys created in AI Studio after May 28, 2026 are authorization keys by default. Avoid browser/referrer restrictions for this server-to-server request. The bid maker displays Google's specific error and a suggested next step if Gemini rejects the request.

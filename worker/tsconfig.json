@@ -7,7 +7,17 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["adapters/**/*.ts"]
+  "include": [
+    "adapters/**/*.ts",
+    "net/**/*.ts",
+    "storage/**/*.ts",
+    "enricher/**/*.ts",
+    "engine.ts",
+    "engine.test.ts",
+    "cli.ts"
+  ]
 }

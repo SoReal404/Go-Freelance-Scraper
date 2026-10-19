@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowRight, Flame, Plus, Search, Trash2, X, Zap } from 'lucide-react'
+import { ArrowRight, Flame, Menu, Plus, Search, Trash2, X, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { LiveProjectsFeed } from '@/components/live-projects-feed'
@@ -146,6 +146,7 @@ function SkillPicker({
 function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const [name, setName] = useState('')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -167,17 +168,32 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#05050a] text-white">
-      <header className="flex h-20 items-center justify-between border-b border-white/[.07] px-5 md:px-10">
+      <header className="flex min-h-16 flex-wrap items-center justify-between gap-y-3 border-b border-white/[.07] px-4 py-3 sm:px-5 md:h-20 md:flex-nowrap md:px-10 md:py-0">
         <a href="/dashboard" className="flex items-center gap-2 text-lg font-semibold">
           <span className="grid size-8 place-items-center rounded-lg bg-[#2541FF]"><Zap className="size-4 fill-current" /></span>
           GO <span className="text-[#6f82ff]">Freelance</span>
         </a>
-        <nav className="flex items-center gap-4 text-sm text-white/60">
+        <nav aria-label="Workspace navigation" className="hidden items-center gap-4 text-sm text-white/60 md:flex">
           <a href="/dashboard" className="hover:text-white">Dashboard</a>
           <a href="/profile" className="hover:text-white">Profile</a>
-          <span className="hidden text-white/35 sm:block">{name}</span>
+          <span className="hidden max-w-48 truncate text-white/35 lg:block">{name}</span>
           <button onClick={signOut} className="hover:text-white">Sign out</button>
         </nav>
+        <button
+          type="button"
+          className="grid size-9 place-items-center rounded-lg border border-white/10 text-white md:hidden"
+          aria-label={mobileMenuOpen ? 'Close workspace navigation' : 'Open workspace navigation'}
+          aria-expanded={mobileMenuOpen}
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          {mobileMenuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+        </button>
+        {mobileMenuOpen && <nav aria-label="Mobile workspace navigation" className="flex w-full flex-col gap-1 border-t border-white/[.07] pt-2 text-sm text-white/65 md:hidden">
+          <a href="/dashboard" className="rounded-lg px-3 py-3 hover:bg-white/[.06] hover:text-white">Dashboard</a>
+          <a href="/profile" className="rounded-lg px-3 py-3 hover:bg-white/[.06] hover:text-white">Profile</a>
+          {name && <span className="px-3 py-2 text-xs text-white/35">{name}</span>}
+          <button onClick={signOut} className="rounded-lg px-3 py-3 text-left hover:bg-white/[.06] hover:text-white">Sign out</button>
+        </nav>}
       </header>
       <main>{children}</main>
     </div>
@@ -284,11 +300,11 @@ export function FreelancerOnboarding() {
 
   return (
     <WorkspaceShell>
-      <div className="mx-auto max-w-2xl px-5 py-16">
+      <div className="mx-auto max-w-2xl px-4 py-10 sm:px-5 sm:py-16">
         <p className="text-xs uppercase tracking-[.2em] text-[#8290ff]">Set up your workspace</p>
-        <h1 className="mt-3 text-4xl font-medium">Tell us what you do.</h1>
+        <h1 className="mt-3 text-3xl font-medium sm:text-4xl">Tell us what you do.</h1>
         <p className="mt-3 text-sm leading-6 text-white/50">Your profile is used to personalize your workspace. You can add separate profiles for different specialties later.</p>
-        <form onSubmit={finish} className="mt-8 flex flex-col gap-5 rounded-3xl border border-white/10 bg-white/[.025] p-6 md:p-8">
+        <form onSubmit={finish} className="mt-8 flex flex-col gap-5 rounded-3xl border border-white/10 bg-white/[.025] p-4 sm:p-6 md:p-8">
           <label className="flex flex-col gap-2 text-sm text-white/70">Your name
             <input className="input" value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" required />
           </label>
@@ -351,7 +367,7 @@ export function FreelancerDashboard() {
         </p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-5">
           <div>
-            <h1 className="text-4xl font-medium">Welcome back{workspace.fullName ? `, ${workspace.fullName}` : ''}.</h1>
+            <h1 className="text-3xl font-medium tracking-tight sm:text-4xl">Welcome back{workspace.fullName ? `, ${workspace.fullName}` : ''}.</h1>
             <p className="mt-2 text-sm text-white/45">{activeProfile ? `Your active profile: ${activeProfile.title}` : 'Your freelancer workspace'}</p>
           </div>
           <div className="flex items-center gap-3 rounded-xl border border-orange-400/20 bg-orange-400/10 px-4 py-3">
@@ -363,8 +379,8 @@ export function FreelancerDashboard() {
           </div>
         </div>
         {error && <p role="alert" className="mt-6 text-sm text-red-300">{error}</p>}
-        <section className="mt-8 rounded-2xl border border-white/10 bg-white/[.025] p-6">
-          <div className="flex items-center justify-between gap-3">
+        <section className="mt-8 rounded-2xl border border-white/10 bg-white/[.025] p-4 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h2 className="text-lg font-medium">Your activity</h2><p className="mt-1 text-sm text-white/40">Visit your dashboard to keep your streak going.</p></div>
             <a href="/profile" className="text-sm text-[#aeb8ff] hover:text-white">Manage profile <ArrowRight className="ml-1 inline size-4" /></a>
           </div>
@@ -372,7 +388,7 @@ export function FreelancerDashboard() {
             {activity.map((active, index) => <span key={index} title={`${28 - index} days ago`} className={`aspect-square rounded ${active ? 'bg-[#5268ff]' : 'bg-white/[.07]'}`} />)}
           </div>
         </section>
-        <section className="mt-6 rounded-2xl border border-white/10 bg-white/[.025] p-6">
+        <section className="mt-6 rounded-2xl border border-white/10 bg-white/[.025] p-4 sm:p-6">
           <h2 className="text-lg font-medium">Your profile skills</h2>
           {activeProfile?.skills.length
             ? <div className="mt-4 flex flex-wrap gap-2">{activeProfile.skills.map((skill) => <span key={skill} className="rounded-lg bg-[#2541FF]/15 px-3 py-2 text-xs text-[#aeb8ff]">{skill}</span>)}</div>
@@ -467,13 +483,13 @@ export function FreelancerProfilePage() {
 
   return (
     <WorkspaceShell>
-      <div className="mx-auto max-w-5xl px-5 py-10">
+      <div className="mx-auto max-w-5xl px-4 py-7 sm:px-5 sm:py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div><p className="text-xs uppercase tracking-[.2em] text-[#8290ff]">Freelancer workspace</p><h1 className="mt-2 text-3xl font-medium">Your profiles</h1><p className="mt-2 text-sm text-white/45">Keep separate skills and projects for each specialty.</p></div>
-          <Button onClick={() => setAddingProfile((open) => !open)} disabled={busy} className="bg-[#2541FF] text-white"><Plus data-icon="inline-start" /> Add specialized profile</Button>
+          <Button onClick={() => setAddingProfile((open) => !open)} disabled={busy} className="w-full bg-[#2541FF] text-white sm:w-auto"><Plus data-icon="inline-start" /> Add specialized profile</Button>
         </div>
 
-        {addingProfile && <form className="mt-5 flex gap-2" onSubmit={(event) => { event.preventDefault(); void addProfile() }}>
+        {addingProfile && <form className="mt-5 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void addProfile() }}>
           <input className="input" value={newProfileTitle} onChange={(event) => setNewProfileTitle(event.target.value)} placeholder="e.g. Machine learning engineer" aria-label="New profile title" />
           <Button type="submit" disabled={busy} className="bg-[#2541FF] text-white">Create</Button>
           <Button type="button" onClick={() => setAddingProfile(false)} variant="ghost" className="text-white/60">Cancel</Button>
@@ -483,7 +499,7 @@ export function FreelancerProfilePage() {
           {workspace.profiles.map((item) => <button key={item.id} onClick={() => void selectProfile(item.id)} disabled={busy} className={`rounded-full border px-4 py-2 text-sm ${item.id === profile?.id ? 'border-[#6e80ff] bg-[#2541FF]/20 text-white' : 'border-white/10 text-white/50'}`}>{item.title}</button>)}
         </div>
 
-        <section className="mt-6 rounded-2xl border border-white/10 bg-white/[.025] p-6">
+        <section className="mt-6 rounded-2xl border border-white/10 bg-white/[.025] p-4 sm:p-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div><h2 className="text-lg font-medium">Daily streak</h2><p className="mt-1 text-sm text-white/40">Activity is counted once per UTC day when you visit your dashboard.</p></div>
             <p className="text-3xl font-semibold text-orange-200">{workspace.streakCount} <span className="text-sm font-normal text-white/40">days</span></p>
@@ -495,7 +511,7 @@ export function FreelancerProfilePage() {
 
         {error && !profile && <p role="alert" className="mt-6 text-sm text-red-300">{error}</p>}
         {profile ? <>
-          <section className="mt-6 flex flex-col gap-5 rounded-2xl border border-white/10 bg-white/[.025] p-6">
+          <section className="mt-6 flex flex-col gap-5 rounded-2xl border border-white/10 bg-white/[.025] p-4 sm:p-6">
             <h2 className="text-lg font-medium">Profile details</h2>
             <label className="flex flex-col gap-2 text-sm text-white/65">Profile title
               <input className="input" value={profile.title} onChange={(event) => setProfile({ ...profile, title: event.target.value })} />
@@ -510,8 +526,8 @@ export function FreelancerProfilePage() {
             />
           </section>
 
-          <section className="mt-5 rounded-2xl border border-white/10 bg-white/[.025] p-6">
-            <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-medium">Projects</h2><p className="mt-1 text-sm text-white/40">Show work you have completed for this specialty.</p></div><Button onClick={() => setProjectDraft({ id: '', title: '', description: '', url: '', skills: [] })} variant="outline" className="border-white/15 text-white"><Plus data-icon="inline-start" /> Add project</Button></div>
+          <section className="mt-5 rounded-2xl border border-white/10 bg-white/[.025] p-4 sm:p-6">
+            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="text-lg font-medium">Projects</h2><p className="mt-1 text-sm text-white/40">Show work you have completed for this specialty.</p></div><Button onClick={() => setProjectDraft({ id: '', title: '', description: '', url: '', skills: [] })} variant="outline" className="w-full border-white/15 text-white sm:w-auto"><Plus data-icon="inline-start" /> Add project</Button></div>
             {profile.projects.length > 0 && <div className="mt-5 grid gap-3 md:grid-cols-2">{profile.projects.map((project) => <article key={project.id} className="rounded-xl border border-white/10 p-4"><div className="flex justify-between gap-3"><h3 className="font-medium">{project.title}</h3><div className="flex gap-2"><button aria-label={`Edit ${project.title}`} onClick={() => setProjectDraft({ ...project })} className="text-xs text-[#aeb8ff]">Edit</button><button aria-label={`Remove ${project.title}`} onClick={() => setProfile({ ...profile, projects: profile.projects.filter((item) => item.id !== project.id) })}><Trash2 className="size-4 text-white/40" /></button></div></div>{project.description && <p className="mt-2 text-sm text-white/45">{project.description}</p>}{project.url && <a href={project.url} target="_blank" rel="noreferrer" className="mt-2 block text-xs text-[#aeb8ff]">{project.url}</a>}{project.skills.length > 0 && <p className="mt-3 text-xs text-white/40">{project.skills.join(' · ')}</p>}</article>)}</div>}
             {projectDraft && <div className="mt-5 grid gap-3 rounded-xl border border-[#5268ff]/30 p-4">
               <label className="flex flex-col gap-2 text-sm text-white/65">Project title<input className="input" value={projectDraft.title} onChange={(event) => setProjectDraft({ ...projectDraft, title: event.target.value })} /></label>

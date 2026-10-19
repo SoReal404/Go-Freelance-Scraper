@@ -5,3 +5,9 @@ node_modules/
 data/run-logs/
 data/projects.json
 data/*.csv
+
+.env.*
+!.env.example
+data/*.json
+spike/samples/
+spike/logs/

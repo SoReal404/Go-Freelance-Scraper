@@ -1,10 +1,10 @@
 import { load } from 'cheerio';
 import { createNewListingTracker } from './listing-tracker.ts';
 import type { NormalizedProject, PlatformAdapter } from './types.ts';
+import { http, SCRAPER_USER_AGENT, SCRAPE_POLL_INTERVAL_MS } from '../net/polite-http.ts';
 
 export const SHOGHLONLINE_LISTING_URL = 'https://shoghlonline.com/jobs';
-export const SHOGHLONLINE_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+export const SHOGHLONLINE_USER_AGENT = SCRAPER_USER_AGENT;
 
 export interface ShoghlonlineParseResult {
   projects: NormalizedProject[];
@@ -81,10 +81,7 @@ export function parseShoghlonlineProjects(html: string, seenAt = new Date()): Sh
 }
 
 export async function fetchShoghlonlineHtml(): Promise<{ status: number; url: string; html: string }> {
-  const response = await fetch(SHOGHLONLINE_LISTING_URL, {
-    headers: { 'User-Agent': SHOGHLONLINE_USER_AGENT, Accept: 'text/html,application/xhtml+xml,*/*;q=0.8' },
-    signal: AbortSignal.timeout(20_000),
-  });
+  const response = await http.get(SHOGHLONLINE_LISTING_URL, { timeoutMs: 20_000 });
   return { status: response.status, url: response.url, html: await response.text() };
 }
 
@@ -94,10 +91,7 @@ const trackNewListings = createNewListingTracker();
 export async function enrichShoghlonlineProjectDetail(project: NormalizedProject): Promise<NormalizedProject> {
   if (!project.url) return project;
   try {
-    const response = await fetch(project.url, {
-      headers: { 'User-Agent': SHOGHLONLINE_USER_AGENT, Accept: 'text/html,application/xhtml+xml,*/*;q=0.8' },
-      signal: AbortSignal.timeout(15_000),
-    });
+    const response = await http.get(project.url, { timeoutMs: 15_000 });
     if (!response.ok) return project;
 
     const html = await response.text();
@@ -133,7 +127,7 @@ export const shoghlonlineAdapter: PlatformAdapter = {
   id: 'shoghlonline',
   name: 'Shoghlonline',
   region: 'middle-east',
-  pollIntervalMs: 60_000,
+  pollIntervalMs: SCRAPE_POLL_INTERVAL_MS,
   async fetchNewProjects(since) {
     const response = await fetchShoghlonlineHtml();
     if (response.status === 403 || response.status === 429 || challengePattern.test(response.html)) {

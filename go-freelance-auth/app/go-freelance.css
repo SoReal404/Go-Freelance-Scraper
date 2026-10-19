@@ -1,1 +1,20 @@
 .aurora{position:absolute;filter:blur(70px);opacity:.35;border-radius:999px}.aurora-one{width:45vw;height:30vw;background:#2541ff;top:-12vw;left:12vw}.aurora-two{width:35vw;height:25vw;background:#6d2bff;top:18vw;right:-10vw}.text-gradient{background:linear-gradient(110deg,#fff 15%,#7c8cff 65%,#b16dff);-webkit-background-clip:text;background-clip:text;color:transparent}.eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#8290ff;font-weight:600}.reveal{animation:rise .7s cubic-bezier(.2,.8,.2,1) both}.reveal-delay-1{animation-delay:.08s}.reveal-delay-2{animation-delay:.16s}.reveal-delay-3{animation-delay:.24s}.job-card{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025);border-radius:16px;padding:18px;transition:transform .25s,border-color .25s,box-shadow .25s}.job-card:hover{transform:translateY(-3px);border-color:rgba(111,130,255,.5);box-shadow:0 12px 35px rgba(37,65,255,.12)}.spotlight{transition:transform .25s,border-color .25s,background .25s}.spotlight:hover{transform:translateY(-4px);border-color:rgba(111,130,255,.35);background:rgba(37,65,255,.06)}.marquee{animation:marquee 24s linear infinite}.input{height:46px;width:100%;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);padding:0 14px;color:white;outline:none;font-size:14px}.input:focus{border-color:#6e80ff;box-shadow:0 0 0 3px rgba(37,65,255,.15)}select.input{appearance:none;color:#fff;background-color:#101326;color-scheme:dark}select.input option{background:#101326;color:#fff}textarea.input{height:auto;padding-top:12px}.label{display:flex;flex-direction:column;gap:8px;font-size:12px;color:rgba(255,255,255,.55)}.choice{border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 18px;font-size:12px;color:rgba(255,255,255,.65);background:rgba(255,255,255,.04);cursor:pointer;transition:border-color .2s,background .2s,color .2s}.choice:hover{border-color:rgba(111,130,255,.6);color:#fff}.choice[aria-pressed="true"]{border-color:#6e80ff;background:rgba(37,65,255,.2);color:#fff}.profile-card{border:1px solid rgba(255,255,255,.1);border-radius:18px;background:rgba(255,255,255,.025);padding:22px}.profile-card h2{font-size:14px;font-weight:500}.robot{position:relative;width:92px;height:72px;border-radius:28px 28px 22px 22px;background:linear-gradient(135deg,#7180ff,#2541ff);box-shadow:0 15px 40px rgba(37,65,255,.35);animation:float 3s ease-in-out infinite}.robot:before{content:'';position:absolute;width:38px;height:10px;border-radius:9px 9px 0 0;background:#5268ff;top:-8px;left:27px}.robot-eye{position:absolute;top:27px;width:9px;height:11px;border-radius:5px;background:white}.robot-eye.left{left:27px}.robot-eye.right{right:27px}.robot-mouth{position:absolute;left:39px;top:45px;width:14px;height:6px;border-bottom:2px solid white;border-radius:50%}.robot:after{content:'';position:absolute;bottom:-7px;left:14px;right:14px;height:8px;border-radius:50%;background:rgba(111,130,255,.3);filter:blur(5px)}@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes float{50%{transform:translateY(-7px) rotate(1deg)}}@keyframes marquee{to{transform:translateX(-50%)}}@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+@media (max-width: 639px) {
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  .input {
+    font-size: 16px;
+  }
+
+  .mobile-project-title {
+    display: block;
+    overflow: visible;
+    -webkit-box-orient: initial;
+    -webkit-line-clamp: unset;
+  }
+
+}

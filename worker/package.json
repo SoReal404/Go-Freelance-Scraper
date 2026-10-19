@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test adapters/mostaql.test.ts adapters/nafezly.test.ts adapters/shoghlonline.test.ts adapters/freelance-arabs.test.ts adapters/listing-tracker.test.ts adapters/freelancer.test.ts adapters/peopleperhour.test.ts adapters/upwork.test.ts adapters/guru.test.ts",
+    "test": "node --experimental-strip-types --test net/polite-http.test.ts storage/project-store.test.ts engine.test.ts adapters/mostaql.test.ts adapters/nafezly.test.ts adapters/shoghlonline.test.ts adapters/freelance-arabs.test.ts adapters/listing-tracker.test.ts adapters/freelancer.test.ts adapters/peopleperhour.test.ts",
     "start": "node --experimental-strip-types cli.ts --watch",
     "scrape": "node --experimental-strip-types cli.ts --once",
     "scrape:me": "node --experimental-strip-types cli.ts --region=middle-east --once",
@@ -12,7 +12,8 @@
     "health": "node --experimental-strip-types cli.ts --health",
     "stats": "node --experimental-strip-types cli.ts --stats",
     "test:batch2": "node --experimental-strip-types --test adapters/shoghlonline.test.ts adapters/nafezly.test.ts adapters/freelance-arabs.test.ts adapters/listing-tracker.test.ts",
-    "test:mostaql-time": "node --experimental-strip-types --test adapters/mostaql.test.ts"
+    "test:mostaql-time": "node --experimental-strip-types --test adapters/mostaql.test.ts",
+    "sync": "node --experimental-strip-types cli.ts --sync"
   },
   "dependencies": {
     "cheerio": "^1.1.2",

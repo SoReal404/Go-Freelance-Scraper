@@ -1,7 +1,7 @@
 import { createNewListingTracker } from './listing-tracker.ts';
 import type { NormalizedProject, PlatformAdapter } from './types.ts';
+import { http, SCRAPER_USER_AGENT } from '../net/polite-http.ts';
 
-export const DEFAULT_FREELANCER_TOKEN = 'OtQ8XOM3XjJT39EV347Y8sjvjwMa9m';
 export const FREELANCER_API_BASE = 'https://www.freelancer.com/api/projects/0.1/projects';
 
 export interface FreelancerApiResponse {
@@ -89,17 +89,16 @@ export function parseFreelancerProject(project: FreelancerApiProject): Normalize
 }
 
 export async function fetchFreelancerActiveProjects(
-  token = process.env.FREELANCER_OAUTH_TOKEN || DEFAULT_FREELANCER_TOKEN,
+  token = process.env.FREELANCER_OAUTH_TOKEN ?? '',
   limit = 50,
 ): Promise<{ status: number; projects: NormalizedProject[]; rawCount: number }> {
   const url = `${FREELANCER_API_BASE}/active/?limit=${limit}&full_description=true&job_details=true&sort_field=time_updated&sort_direction=desc`;
 
-  const response = await fetch(url, {
-    headers: {
-      'Freelancer-OAuth-V1': token,
-      Accept: 'application/json',
-    },
-    signal: AbortSignal.timeout(20_000),
+  const response = await http.get(url, {
+    accept: 'application/json',
+    headers: { 'Freelancer-OAuth-V1': token, 'User-Agent': SCRAPER_USER_AGENT },
+    timeoutMs: 20_000,
+    skipRobots: true, // official authenticated API, not a crawled page
   });
 
   if (!response.ok) {
@@ -118,7 +117,7 @@ export async function fetchFreelancerActiveProjects(
 }
 
 export function createFreelancerAdapter(
-  getToken = () => process.env.FREELANCER_OAUTH_TOKEN || DEFAULT_FREELANCER_TOKEN,
+  getToken = () => process.env.FREELANCER_OAUTH_TOKEN ?? '',
 ): PlatformAdapter {
   const tracker = createNewListingTracker();
 

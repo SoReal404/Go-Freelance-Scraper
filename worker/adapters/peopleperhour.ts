@@ -1,10 +1,10 @@
 import { load } from 'cheerio';
 import { createNewListingTracker } from './listing-tracker.ts';
 import type { NormalizedProject, PlatformAdapter } from './types.ts';
+import { http, SCRAPER_USER_AGENT, SCRAPE_POLL_INTERVAL_MS } from '../net/polite-http.ts';
 
 export const PPH_LISTING_URL = 'https://www.peopleperhour.com/freelance-jobs';
-export const PPH_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+export const PPH_USER_AGENT = SCRAPER_USER_AGENT;
 
 export interface PphRawProject {
   id: string;
@@ -88,12 +88,9 @@ export function parsePphProject(raw: PphRawProject): NormalizedProject | undefin
 }
 
 export async function fetchPphHtml(): Promise<{ status: number; html: string }> {
-  const response = await fetch(PPH_LISTING_URL, {
-    headers: {
-      'User-Agent': PPH_USER_AGENT,
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-    signal: AbortSignal.timeout(20_000),
+  const response = await http.get(PPH_LISTING_URL, {
+    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    timeoutMs: 20_000,
   });
   return { status: response.status, html: await response.text() };
 }
@@ -101,10 +98,7 @@ export async function fetchPphHtml(): Promise<{ status: number; html: string }> 
 export async function enrichPphProjectDetail(project: NormalizedProject): Promise<NormalizedProject> {
   if (!project.url) return project;
   try {
-    const res = await fetch(project.url, {
-      headers: { 'User-Agent': PPH_USER_AGENT },
-      signal: AbortSignal.timeout(15_000),
-    });
+    const res = await http.get(project.url, { timeoutMs: 15_000 });
     if (!res.ok) return project;
 
     const html = await res.text();
@@ -138,11 +132,13 @@ export async function enrichPphProjectDetail(project: NormalizedProject): Promis
   }
 }
 
+const trackNewListings = createNewListingTracker();
+
 export const peoplePerHourAdapter: PlatformAdapter = {
   id: 'peopleperhour',
   name: 'PeoplePerHour',
   region: 'international',
-  pollIntervalMs: 90_000,
+  pollIntervalMs: SCRAPE_POLL_INTERVAL_MS,
 
   async fetchNewProjects(since: Date): Promise<NormalizedProject[]> {
     const { status, html } = await fetchPphHtml();
@@ -160,8 +156,7 @@ export const peoplePerHourAdapter: PlatformAdapter = {
       if (parsed) projects.push(parsed);
     }
 
-    const tracker = createNewListingTracker();
-    return tracker(projects, since);
+    return trackNewListings(projects, since);
   },
 
   async enrichProject(project: NormalizedProject): Promise<NormalizedProject> {

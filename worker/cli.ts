@@ -3,7 +3,8 @@ try { process.loadEnvFile(); } catch { /* ignore if .env missing */ }
 import { allAdapters, getAdapter, getAdaptersByRegion } from './adapters/index.ts';
 import type { PlatformId } from './adapters/index.ts';
 import { ScraperEngine } from './engine.ts';
-import { defaultStore } from './storage/project-store.ts';
+import { defaultStore, fromStoredProject } from './storage/project-store.ts';
+import { upsertProjectsBatch, deleteProjectsOlderThan } from './storage/supabase-store.ts';
 
 function printHelp() {
   console.log(`
@@ -18,19 +19,23 @@ Options:
   --health                Check connectivity & health of all platforms
   --region=<name>         Filter platforms: all | middle-east | international (default: all)
   --platforms=<p1,p2>     Comma-separated platform IDs to scrape
-                          Available: freelancer, peopleperhour, upwork, guru,
+                          Available: freelancer, peopleperhour,
                                      mostaql, nafezly, shoghlonline, freelance-arabs
   --once                  Run one scrape cycle, enrich new projects, and exit
   --watch                 Run continuously in real-time monitoring mode
   --no-enrich             Do not fetch project detail pages (scrape listings only)
   --stats                 Print summary of collected projects in storage
+  --sync                  Push every project in the local JSON store to Supabase (backfill / recovery)
+  --cleanup               Delete projects older than 3 days (or --max-age-days=N) from DB & local store
+  --max-age-days=<days>   Configure cutoff age in days for cleanup (default: 3)
   --help                  Show this help screen
 
 Environment Variables:
-  FREELANCER_OAUTH_TOKEN  OAuth token for Freelancer.com active projects API
-  UPWORK_OAUTH_TOKEN      OAuth Bearer token for Upwork GraphQL API
-  GURU_COOKIE             Session cookie for Guru.com
-  GURU_PROXY_URL          Residential proxy URL for Guru.com
+  FREELANCER_OAUTH_TOKEN  OAuth token for the Freelancer.com API (required, no default)
+  SCRAPER_CONTACT         Email or URL put in the User-Agent so sites can reach you
+  SCRAPE_POLL_SECONDS     Poll interval for scraped sites (default 300, minimum 120)
+  MIN_REQUEST_GAP_MS      Minimum gap between requests to the same host (default 3000)
+  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   Database sync (server-side key, never the anon key)
 
 Examples:
   # Check health of all platforms:
@@ -83,6 +88,18 @@ async function runStats() {
   console.log('');
 }
 
+async function runSync() {
+  const stored = await defaultStore.readAll();
+  console.log(`\n🔄 Pushing ${stored.length} locally stored projects to Supabase...`);
+  const result = await upsertProjectsBatch(stored.map(fromStoredProject));
+  if (result.skipped) {
+    console.log('   Supabase is not configured (SUPABASE_URL / key missing). Nothing was sent.\n');
+    return;
+  }
+  console.log(`   Synced: ${result.ok}   Failed: ${result.failed}\n`);
+  if (result.failed) process.exitCode = 1;
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -93,6 +110,23 @@ async function main() {
 
   if (args.includes('--stats')) {
     await runStats();
+    return;
+  }
+
+  if (args.includes('--sync')) {
+    await runSync();
+    return;
+  }
+
+  const maxAgeArg = args.find((a) => a.startsWith('--max-age-days='));
+  const maxProjectAgeDays = maxAgeArg ? parseInt(maxAgeArg.split('=')[1], 10) : 3;
+
+  if (args.includes('--cleanup')) {
+    console.log(`\n🧹 Cleaning up projects older than ${maxProjectAgeDays} days...`);
+    const db = await deleteProjectsOlderThan(maxProjectAgeDays);
+    const local = await defaultStore.pruneOlderThan(maxProjectAgeDays);
+    console.log(`   Deleted from Supabase: ${db.deleted} ${db.error ? `(warning: ${db.error})` : ''}`);
+    console.log(`   Pruned from local store: ${local}\n`);
     return;
   }
 
@@ -130,11 +164,13 @@ async function main() {
   console.log(`\n🚀 Initializing Go Freelance Engine...`);
   console.log(`   Configured platforms (${selectedAdapters.length}): ${selectedAdapters.map((a) => a.id).join(', ')}`);
   console.log(`   Detail enrichment (full descriptions/skills/budgets): ${enrichDetails ? 'Enabled' : 'Disabled'}`);
+  console.log(`   Retention policy: Automatically deletes projects older than ${maxProjectAgeDays} days`);
   console.log(`   Mode: ${watch ? 'Continuous Watch' : 'Single Pass (--once)'}\n`);
 
   const engine = new ScraperEngine({
     adapters: selectedAdapters,
     enrichDetails,
+    maxProjectAgeDays,
     onLog: (ev) => {
       const time = new Date().toLocaleTimeString();
       if (ev.event === 'new_project_detected') {
@@ -144,6 +180,10 @@ async function main() {
         console.log(`[${time}] 📥 Polled ${ev.name}: ${ev.projects_fetched} active listings`);
       } else if (ev.event === 'poll_error') {
         console.log(`[${time}] ⚠️  Poll warning [${ev.platform}]: ${ev.error}`);
+      } else if (ev.event === 'cleanup_completed') {
+        console.log(`[${time}] 🧹 CLEANUP: pruned projects older than ${ev.max_age_days} days (Supabase: ${ev.supabase_deleted}, Local store: ${ev.local_pruned})`);
+      } else if (ev.event === 'supabase_sync_failed' || ev.event === 'supabase_sync_retry') {
+        console.log(`[${time}] 🗄️  ${ev.event}: ${JSON.stringify(ev)}`);
       }
     },
   });
@@ -165,11 +205,14 @@ async function main() {
     await runStats();
   } else if (watch) {
     const abort = new AbortController();
-    process.on('SIGINT', () => {
-      console.log('\n🛑 Stopping scraper engine...');
-      engine.stop();
-      abort.abort();
-    });
+    // SIGTERM is what systemd, Docker and pm2 send on stop/restart; SIGINT is Ctrl+C.
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+      process.on(signal, () => {
+        console.log(`\n🛑 ${signal} received, stopping scraper engine...`);
+        engine.stop();
+        abort.abort();
+      });
+    }
     await engine.startMonitoring(abort.signal);
   }
 }

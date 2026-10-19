@@ -1,9 +1,9 @@
 import { load } from 'cheerio';
 import type { NormalizedProject, PlatformAdapter } from './types.ts';
+import { http, SCRAPER_USER_AGENT, SCRAPE_POLL_INTERVAL_MS } from '../net/polite-http.ts';
 
 export const MOSTAQL_LISTING_URL = 'https://mostaql.com/projects?sort=latest';
-export const MOSTAQL_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+export const MOSTAQL_USER_AGENT = SCRAPER_USER_AGENT;
 
 export interface MostaqlParseResult {
   projects: NormalizedProject[];
@@ -115,12 +115,9 @@ export function parseMostaqlProjects(html: string, seenAt = new Date()): Mostaql
 }
 
 export async function fetchMostaqlHtml(): Promise<{ status: number; url: string; html: string }> {
-  const response = await fetch(MOSTAQL_LISTING_URL, {
-    headers: {
-      'User-Agent': MOSTAQL_USER_AGENT,
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-    signal: AbortSignal.timeout(20_000),
+  const response = await http.get(MOSTAQL_LISTING_URL, {
+    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    timeoutMs: 20_000,
   });
   return { status: response.status, url: response.url, html: await response.text() };
 }
@@ -151,10 +148,7 @@ export function parseMostaqlBudgetFromText(text: string): { budgetMin?: number; 
 export async function enrichMostaqlProjectDetail(project: NormalizedProject): Promise<NormalizedProject> {
   if (!project.url) return project;
   try {
-    const response = await fetch(project.url, {
-      headers: { 'User-Agent': MOSTAQL_USER_AGENT },
-      signal: AbortSignal.timeout(15_000),
-    });
+    const response = await http.get(project.url, { timeoutMs: 15_000 });
     if (!response.ok) return project;
 
     const html = await response.text();
@@ -208,7 +202,7 @@ export const mostaqlAdapter: PlatformAdapter = {
   id: 'mostaql',
   name: 'Mostaql',
   region: 'middle-east',
-  pollIntervalMs: 60_000,
+  pollIntervalMs: SCRAPE_POLL_INTERVAL_MS,
 
   async fetchNewProjects(since: Date): Promise<NormalizedProject[]> {
     const response = await fetchMostaqlHtml();

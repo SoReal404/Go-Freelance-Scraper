@@ -1,10 +1,10 @@
 import { load } from 'cheerio';
 import { createNewListingTracker } from './listing-tracker.ts';
 import type { NormalizedProject, PlatformAdapter } from './types.ts';
+import { http, SCRAPER_USER_AGENT, SCRAPE_POLL_INTERVAL_MS } from '../net/polite-http.ts';
 
 export const NAFEZLY_LISTING_URL = 'https://nafezly.com/projects';
-export const NAFEZLY_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+export const NAFEZLY_USER_AGENT = SCRAPER_USER_AGENT;
 
 export interface NafezlyParseResult {
   projects: NormalizedProject[];
@@ -104,10 +104,7 @@ export function parseNafezlyProjects(html: string, seenAt = new Date()): Nafezly
 }
 
 export async function fetchNafezlyHtml(): Promise<{ status: number; url: string; html: string }> {
-  const response = await fetch(NAFEZLY_LISTING_URL, {
-    headers: { 'User-Agent': NAFEZLY_USER_AGENT, Accept: 'text/html,application/xhtml+xml,*/*;q=0.8' },
-    signal: AbortSignal.timeout(20_000),
-  });
+  const response = await http.get(NAFEZLY_LISTING_URL, { timeoutMs: 20_000 });
   return { status: response.status, url: response.url, html: await response.text() };
 }
 
@@ -117,10 +114,7 @@ const trackNewListings = createNewListingTracker();
 export async function enrichNafezlyProjectDetail(project: NormalizedProject): Promise<NormalizedProject> {
   if (!project.url) return project;
   try {
-    const response = await fetch(project.url, {
-      headers: { 'User-Agent': NAFEZLY_USER_AGENT, Accept: 'text/html,application/xhtml+xml,*/*;q=0.8' },
-      signal: AbortSignal.timeout(15_000),
-    });
+    const response = await http.get(project.url, { timeoutMs: 15_000 });
     if (!response.ok) return project;
 
     const html = await response.text();
@@ -156,7 +150,7 @@ export const nafezlyAdapter: PlatformAdapter = {
   id: 'nafezly',
   name: 'Nafezly',
   region: 'middle-east',
-  pollIntervalMs: 60_000,
+  pollIntervalMs: SCRAPE_POLL_INTERVAL_MS,
   async fetchNewProjects(since) {
     const response = await fetchNafezlyHtml();
     if (response.status === 403 || response.status === 429 || challengePattern.test(response.html)) {

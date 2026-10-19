@@ -1,9 +1,7 @@
 import { load } from 'cheerio';
 import type { NormalizedProject } from '../adapters/types.ts';
 import { getAdapter } from '../adapters/index.ts';
-
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+import { http } from '../net/polite-http.ts';
 
 const clean = (val: unknown): string => String(val ?? '').replace(/\s+/g, ' ').trim();
 
@@ -87,35 +85,40 @@ export function parseGenericDetailHtml(
 
 /**
  * Enriches a project with full description, skills, and budget by scraping its project URL.
+ *
+ * Every request goes through the polite HTTP client (robots.txt, pacing, backoff). A project that
+ * cannot be enriched (blocked, disallowed, timeout) is simply kept as-is with detailsEnriched=false.
  */
 export async function enrichProjectDetails(
   project: NormalizedProject,
   timeoutMs = 15_000,
 ): Promise<NormalizedProject> {
-  // If the project already has complete details (like Freelancer.com API with full_description), keep it.
+  // Freelancer.com data comes from the official API (already includes the full description and skills).
+  // Never fall back to scraping the website for it.
+  if (project.platform === 'freelancer') return project;
+
+  // Already complete.
   if (project.detailsEnriched && project.description.length > 100 && project.skills.length > 0) {
     return project;
   }
 
+  // A platform-specific enricher is authoritative. If it could not enrich (blocked, 4xx, timeout),
+  // do NOT immediately re-request the same URL with the generic fallback: that doubled the request
+  // volume exactly when a site was already pushing back.
   const adapter = getAdapter(project.platform);
-  // 1. If adapter has a specialized enricher, use it first
   if (adapter?.enrichProject) {
     try {
-      const enriched = await adapter.enrichProject(project);
-      if (enriched.detailsEnriched) return enriched;
+      return await adapter.enrichProject(project);
     } catch {
-      // fallback to generic enricher
+      return project;
     }
   }
 
-  // 2. Generic HTTP fetch fallback
+  // Generic fallback only for adapters without their own enricher.
   if (!project.url) return project;
 
   try {
-    const res = await fetch(project.url, {
-      headers: { 'User-Agent': USER_AGENT },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    const res = await http.get(project.url, { timeoutMs });
     if (!res.ok) return project;
 
     const html = await res.text();

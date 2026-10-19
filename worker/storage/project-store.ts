@@ -83,6 +83,28 @@ export function toStoredProject(project: NormalizedProject, seenAt = new Date())
   };
 }
 
+export function fromStoredProject(p: StoredProject): NormalizedProject {
+  return {
+    platform: p.platform,
+    externalId: p.external_id,
+    title: p.title,
+    description: p.description,
+    listingDescription: p.listing_description,
+    url: p.project_url,
+    budgetMin: p.budget?.min ?? undefined,
+    budgetMax: p.budget?.max ?? undefined,
+    currency: p.budget?.currency ?? undefined,
+    budgetType: p.budget?.type ?? undefined,
+    skills: p.skills ?? [],
+    category: p.category ?? undefined,
+    subCategory: p.sub_category ?? undefined,
+    language: p.language ?? undefined,
+    postedAt: new Date(p.posted_at),
+    firstSeenAt: new Date(p.first_seen_at),
+    detailsEnriched: p.details_enriched,
+  };
+}
+
 export class ProjectStore {
   private filePath: string;
   private seenKeys = new Set<string>();
@@ -117,6 +139,16 @@ export class ProjectStore {
   }
 
   async upsert(project: NormalizedProject): Promise<{ inserted: boolean; project: StoredProject }> {
+    const [result] = await this.upsertMany([project]);
+    return result;
+  }
+
+  /**
+   * Writes a whole batch with ONE read-modify-write of the JSON file (it used to rewrite the entire
+   * file once per project, which gets slow as the file grows).
+   */
+  async upsertMany(batch: NormalizedProject[]): Promise<Array<{ inserted: boolean; project: StoredProject }>> {
+    if (batch.length === 0) return [];
     await this.init();
     await mkdir(dirname(this.filePath), { recursive: true });
 
@@ -126,44 +158,102 @@ export class ProjectStore {
 
     try {
       const projects = await this.readAll();
-      const stored = toStoredProject(project);
+      const index = new Map<string, number>();
+      projects.forEach((p, i) => index.set(`${p.platform}\0${p.external_id}`, i));
 
-      const index = projects.findIndex(
-        (p) => p.platform === stored.platform && p.external_id === stored.external_id,
-      );
+      const results: Array<{ inserted: boolean; project: StoredProject }> = [];
+      const fresh: StoredProject[] = [];
 
-      const inserted = index === -1;
-      if (inserted) {
-        projects.unshift(stored);
-      } else {
-        projects[index] = {
-          ...projects[index],
-          ...stored,
-          first_seen_at: projects[index].first_seen_at || stored.first_seen_at,
-          details_enriched: stored.details_enriched || projects[index].details_enriched,
-        };
+      for (const project of batch) {
+        const stored = toStoredProject(project);
+        const key = `${stored.platform}\0${stored.external_id}`;
+        const at = index.get(key);
+
+        if (at === undefined) {
+          index.set(key, -1); // seen within this batch
+          fresh.push(stored);
+          results.push({ inserted: true, project: stored });
+        } else if (at === -1) {
+          const dup = fresh.findIndex((p) => `${p.platform}\0${p.external_id}` === key);
+          fresh[dup] = { ...fresh[dup], ...stored, first_seen_at: fresh[dup].first_seen_at };
+          results.push({ inserted: false, project: fresh[dup] });
+        } else {
+          projects[at] = {
+            ...projects[at],
+            ...stored,
+            first_seen_at: projects[at].first_seen_at || stored.first_seen_at,
+            details_enriched: stored.details_enriched || projects[at].details_enriched,
+          };
+          results.push({ inserted: false, project: projects[at] });
+        }
       }
 
-      // Sort by posted_at desc
-      projects.sort((a, b) => b.posted_at.localeCompare(a.posted_at));
+      const merged = [...fresh, ...projects];
+      merged.sort((a, b) => b.posted_at.localeCompare(a.posted_at));
 
       const doc: StoredProjectDocument = {
         schema_version: 1,
         updated_at: new Date().toISOString(),
-        total_projects: projects.length,
-        projects,
+        total_projects: merged.length,
+        projects: merged,
       };
 
       tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
-      await writeFile(tempPath, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+      await writeFile(tempPath, `${JSON.stringify(doc)}\n`, 'utf8'); // compact: ~35% smaller than pretty-printed
       await rename(tempPath, this.filePath);
+      tempPath = undefined;
 
-      this.seenKeys.add(`${stored.platform}\0${stored.external_id}`);
+      for (const r of results) this.seenKeys.add(`${r.project.platform}\0${r.project.external_id}`);
+      return results;
+    } finally {
+      if (tempPath) await rm(tempPath, { force: true }).catch(() => {});
+      await lock.close();
+      await rm(lockPath, { force: true });
+    }
+  }
 
-      return {
-        inserted,
-        project: inserted ? stored : projects[index],
-      };
+  /**
+   * Remove projects older than `maxAgeDays` (based on posted_at, falling back to first_seen_at).
+   * Rewrites the JSON file if any projects were pruned.
+   */
+  async pruneOlderThan(maxAgeDays = 3): Promise<number> {
+    await this.init();
+    const cutoffMs = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+
+    await mkdir(dirname(this.filePath), { recursive: true });
+    const lockPath = `${this.filePath}.lock`;
+    const lock = await acquireLock(lockPath);
+    let tempPath: string | undefined;
+
+    try {
+      const projects = await this.readAll();
+      const kept: StoredProject[] = [];
+      let removedCount = 0;
+
+      for (const p of projects) {
+        const time = new Date(p.posted_at || p.first_seen_at).getTime();
+        if (isNaN(time) || time >= cutoffMs) {
+          kept.push(p);
+        } else {
+          removedCount++;
+          this.seenKeys.delete(`${p.platform}\0${p.external_id}`);
+        }
+      }
+
+      if (removedCount > 0) {
+        const doc: StoredProjectDocument = {
+          schema_version: 1,
+          updated_at: new Date().toISOString(),
+          total_projects: kept.length,
+          projects: kept,
+        };
+        tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
+        await writeFile(tempPath, `${JSON.stringify(doc)}\n`, 'utf8');
+        await rename(tempPath, this.filePath);
+        tempPath = undefined;
+      }
+
+      return removedCount;
     } finally {
       if (tempPath) await rm(tempPath, { force: true }).catch(() => {});
       await lock.close();

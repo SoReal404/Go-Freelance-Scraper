@@ -1,10 +1,10 @@
 import { load } from 'cheerio';
 import { createNewListingTracker } from './listing-tracker.ts';
 import type { NormalizedProject, PlatformAdapter } from './types.ts';
+import { http, SCRAPER_USER_AGENT, SCRAPE_POLL_INTERVAL_MS } from '../net/polite-http.ts';
 
 export const FREELANCE_ARABS_LISTING_URL = 'https://arabsfreelancer.com/projects/';
-export const FREELANCE_ARABS_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+export const FREELANCE_ARABS_USER_AGENT = SCRAPER_USER_AGENT;
 
 export interface FreelanceArabsParseResult {
   projects: NormalizedProject[];
@@ -75,10 +75,7 @@ export function parseFreelanceArabsProjects(html: string): FreelanceArabsParseRe
 }
 
 export async function fetchFreelanceArabsHtml(): Promise<{ status: number; url: string; html: string }> {
-  const response = await fetch(FREELANCE_ARABS_LISTING_URL, {
-    headers: { 'User-Agent': FREELANCE_ARABS_USER_AGENT, Accept: 'text/html,application/xhtml+xml,*/*;q=0.8' },
-    signal: AbortSignal.timeout(20_000),
-  });
+  const response = await http.get(FREELANCE_ARABS_LISTING_URL, { timeoutMs: 20_000 });
   return { status: response.status, url: response.url, html: await response.text() };
 }
 
@@ -89,7 +86,7 @@ export const freelanceArabsAdapter: PlatformAdapter = {
   id: 'freelance-arabs',
   name: 'FreelanceArabs',
   region: 'middle-east',
-  pollIntervalMs: 60_000,
+  pollIntervalMs: SCRAPE_POLL_INTERVAL_MS,
   async fetchNewProjects(since) {
     const response = await fetchFreelanceArabsHtml();
     if (response.status === 403 || response.status === 429 || challengePattern.test(response.html)) {
