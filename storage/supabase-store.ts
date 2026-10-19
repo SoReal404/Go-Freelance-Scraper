@@ -150,3 +150,52 @@ export async function upsertProjectsBatch(
   }
   return { ok, failed: failedProjects.length, skipped: 0, failedProjects };
 }
+
+/**
+ * Delete projects older than `maxAgeDays` (default: 3 days) from Supabase.
+ * Checks `posted_at < cutoff`, falling back to `(posted_at IS NULL AND created_at < cutoff)`.
+ */
+export async function deleteProjectsOlderThan(
+  maxAgeDays = 3,
+): Promise<{ deleted: number; error?: string }> {
+  const client = getClient();
+  if (!client) return { deleted: 0 };
+
+  const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
+  let totalDeleted = 0;
+
+  try {
+    // 1. Delete rows where posted_at < cutoff
+    const { data: d1, error: err1 } = await client
+      .from('projects')
+      .delete()
+      .lt('posted_at', cutoff)
+      .select('id');
+
+    if (err1) {
+      console.error('[Supabase] Error deleting old projects by posted_at:', err1.message);
+      return { deleted: totalDeleted, error: err1.message };
+    }
+    if (d1) totalDeleted += d1.length;
+
+    // 2. Also clean up any legacy rows where posted_at is null but created_at < cutoff
+    const { data: d2, error: err2 } = await client
+      .from('projects')
+      .delete()
+      .is('posted_at', null)
+      .lt('created_at', cutoff)
+      .select('id');
+
+    if (err2) {
+      console.error('[Supabase] Error deleting old projects by created_at:', err2.message);
+      return { deleted: totalDeleted, error: err2.message };
+    }
+    if (d2) totalDeleted += d2.length;
+
+    return { deleted: totalDeleted };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Supabase] Unexpected error deleting old projects:', msg);
+    return { deleted: totalDeleted, error: msg };
+  }
+}

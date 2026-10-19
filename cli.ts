@@ -4,7 +4,7 @@ import { allAdapters, getAdapter, getAdaptersByRegion } from './adapters/index.t
 import type { PlatformId } from './adapters/index.ts';
 import { ScraperEngine } from './engine.ts';
 import { defaultStore, fromStoredProject } from './storage/project-store.ts';
-import { upsertProjectsBatch } from './storage/supabase-store.ts';
+import { upsertProjectsBatch, deleteProjectsOlderThan } from './storage/supabase-store.ts';
 
 function printHelp() {
   console.log(`
@@ -26,6 +26,8 @@ Options:
   --no-enrich             Do not fetch project detail pages (scrape listings only)
   --stats                 Print summary of collected projects in storage
   --sync                  Push every project in the local JSON store to Supabase (backfill / recovery)
+  --cleanup               Delete projects older than 3 days (or --max-age-days=N) from DB & local store
+  --max-age-days=<days>   Configure cutoff age in days for cleanup (default: 3)
   --help                  Show this help screen
 
 Environment Variables:
@@ -116,6 +118,18 @@ async function main() {
     return;
   }
 
+  const maxAgeArg = args.find((a) => a.startsWith('--max-age-days='));
+  const maxProjectAgeDays = maxAgeArg ? parseInt(maxAgeArg.split('=')[1], 10) : 3;
+
+  if (args.includes('--cleanup')) {
+    console.log(`\n🧹 Cleaning up projects older than ${maxProjectAgeDays} days...`);
+    const db = await deleteProjectsOlderThan(maxProjectAgeDays);
+    const local = await defaultStore.pruneOlderThan(maxProjectAgeDays);
+    console.log(`   Deleted from Supabase: ${db.deleted} ${db.error ? `(warning: ${db.error})` : ''}`);
+    console.log(`   Pruned from local store: ${local}\n`);
+    return;
+  }
+
   // Parse region filter
   let selectedAdapters = allAdapters;
   const regionArg = args.find((a) => a.startsWith('--region='));
@@ -150,11 +164,13 @@ async function main() {
   console.log(`\n🚀 Initializing Go Freelance Engine...`);
   console.log(`   Configured platforms (${selectedAdapters.length}): ${selectedAdapters.map((a) => a.id).join(', ')}`);
   console.log(`   Detail enrichment (full descriptions/skills/budgets): ${enrichDetails ? 'Enabled' : 'Disabled'}`);
+  console.log(`   Retention policy: Automatically deletes projects older than ${maxProjectAgeDays} days`);
   console.log(`   Mode: ${watch ? 'Continuous Watch' : 'Single Pass (--once)'}\n`);
 
   const engine = new ScraperEngine({
     adapters: selectedAdapters,
     enrichDetails,
+    maxProjectAgeDays,
     onLog: (ev) => {
       const time = new Date().toLocaleTimeString();
       if (ev.event === 'new_project_detected') {
@@ -164,6 +180,8 @@ async function main() {
         console.log(`[${time}] 📥 Polled ${ev.name}: ${ev.projects_fetched} active listings`);
       } else if (ev.event === 'poll_error') {
         console.log(`[${time}] ⚠️  Poll warning [${ev.platform}]: ${ev.error}`);
+      } else if (ev.event === 'cleanup_completed') {
+        console.log(`[${time}] 🧹 CLEANUP: pruned projects older than ${ev.max_age_days} days (Supabase: ${ev.supabase_deleted}, Local store: ${ev.local_pruned})`);
       } else if (ev.event === 'supabase_sync_failed' || ev.event === 'supabase_sync_retry') {
         console.log(`[${time}] 🗄️  ${ev.event}: ${JSON.stringify(ev)}`);
       }

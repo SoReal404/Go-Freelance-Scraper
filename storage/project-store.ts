@@ -212,6 +212,55 @@ export class ProjectStore {
     }
   }
 
+  /**
+   * Remove projects older than `maxAgeDays` (based on posted_at, falling back to first_seen_at).
+   * Rewrites the JSON file if any projects were pruned.
+   */
+  async pruneOlderThan(maxAgeDays = 3): Promise<number> {
+    await this.init();
+    const cutoffMs = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+
+    await mkdir(dirname(this.filePath), { recursive: true });
+    const lockPath = `${this.filePath}.lock`;
+    const lock = await acquireLock(lockPath);
+    let tempPath: string | undefined;
+
+    try {
+      const projects = await this.readAll();
+      const kept: StoredProject[] = [];
+      let removedCount = 0;
+
+      for (const p of projects) {
+        const time = new Date(p.posted_at || p.first_seen_at).getTime();
+        if (isNaN(time) || time >= cutoffMs) {
+          kept.push(p);
+        } else {
+          removedCount++;
+          this.seenKeys.delete(`${p.platform}\0${p.external_id}`);
+        }
+      }
+
+      if (removedCount > 0) {
+        const doc: StoredProjectDocument = {
+          schema_version: 1,
+          updated_at: new Date().toISOString(),
+          total_projects: kept.length,
+          projects: kept,
+        };
+        tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
+        await writeFile(tempPath, `${JSON.stringify(doc)}\n`, 'utf8');
+        await rename(tempPath, this.filePath);
+        tempPath = undefined;
+      }
+
+      return removedCount;
+    } finally {
+      if (tempPath) await rm(tempPath, { force: true }).catch(() => {});
+      await lock.close();
+      await rm(lockPath, { force: true });
+    }
+  }
+
   async getStats(): Promise<{
     total: number;
     byPlatform: Record<string, number>;

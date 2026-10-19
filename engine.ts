@@ -2,7 +2,7 @@ import type { PlatformAdapter, NormalizedProject } from './adapters/types.ts';
 import { allAdapters } from './adapters/index.ts';
 import { enrichProjectDetails } from './enricher/detail-enricher.ts';
 import { ProjectStore, defaultStore } from './storage/project-store.ts';
-import { upsertProjectsBatch } from './storage/supabase-store.ts';
+import { upsertProjectsBatch, deleteProjectsOlderThan } from './storage/supabase-store.ts';
 
 export interface ScraperEngineOptions {
   adapters?: PlatformAdapter[];
@@ -14,6 +14,12 @@ export interface ScraperEngineOptions {
   tickMs?: number;
   /** Test hook: replaces the Supabase batch upsert. */
   syncProjects?: typeof upsertProjectsBatch;
+  /** Test hook: replaces the Supabase delete. */
+  deleteOldProjects?: typeof deleteProjectsOlderThan;
+  /** Maximum age in days before projects are deleted from DB and local store (default: 3). */
+  maxProjectAgeDays?: number;
+  /** How often to run the cleanup job in watch mode (default: 1 hour). */
+  cleanupIntervalMs?: number;
   onNewProject?: (project: NormalizedProject) => void | Promise<void>;
   onLog?: (event: Record<string, unknown>) => void;
 }
@@ -44,6 +50,10 @@ export class ScraperEngine {
   private maxPacingGapMs: number;
   private tickMs: number;
   private syncProjects: typeof upsertProjectsBatch;
+  private deleteOldProjects: typeof deleteProjectsOlderThan;
+  private maxProjectAgeDays: number;
+  private cleanupIntervalMs: number;
+  private lastCleanupAt = 0;
   private onNewProject?: (project: NormalizedProject) => void | Promise<void>;
   private onLog: (event: Record<string, unknown>) => void;
   private isRunning = false;
@@ -61,6 +71,9 @@ export class ScraperEngine {
     this.maxPacingGapMs = options.maxPacingGapMs ?? 10_000;
     this.tickMs = options.tickMs ?? 15_000;
     this.syncProjects = options.syncProjects ?? upsertProjectsBatch;
+    this.deleteOldProjects = options.deleteOldProjects ?? deleteProjectsOlderThan;
+    this.maxProjectAgeDays = options.maxProjectAgeDays ?? 3;
+    this.cleanupIntervalMs = options.cleanupIntervalMs ?? 60 * 60 * 1000;
     this.onNewProject = options.onNewProject;
     this.onLog = options.onLog || ((ev) => console.log(JSON.stringify(ev)));
   }
@@ -116,6 +129,54 @@ export class ScraperEngine {
   }
 
   /**
+   * Cleans up projects older than maxProjectAgeDays from both Supabase and local store.
+   * Runs at most once every cleanupIntervalMs.
+   */
+  async runCleanupIfDue(): Promise<{ supabaseDeleted: number; localPruned: number }> {
+    const now = Date.now();
+    if (now - this.lastCleanupAt < this.cleanupIntervalMs) {
+      return { supabaseDeleted: 0, localPruned: 0 };
+    }
+    this.lastCleanupAt = now;
+
+    let supabaseDeleted = 0;
+    let localPruned = 0;
+
+    try {
+      const dbResult = await this.deleteOldProjects(this.maxProjectAgeDays);
+      supabaseDeleted = dbResult.deleted;
+    } catch (err: any) {
+      this.onLog({
+        event: 'cleanup_supabase_error',
+        error: err?.message || String(err),
+        at: new Date().toISOString(),
+      });
+    }
+
+    try {
+      localPruned = await this.store.pruneOlderThan(this.maxProjectAgeDays);
+    } catch (err: any) {
+      this.onLog({
+        event: 'cleanup_local_error',
+        error: err?.message || String(err),
+        at: new Date().toISOString(),
+      });
+    }
+
+    if (supabaseDeleted > 0 || localPruned > 0) {
+      this.onLog({
+        event: 'cleanup_completed',
+        max_age_days: this.maxProjectAgeDays,
+        supabase_deleted: supabaseDeleted,
+        local_pruned: localPruned,
+        at: new Date().toISOString(),
+      });
+    }
+
+    return { supabaseDeleted, localPruned };
+  }
+
+  /**
    * Runs a single polling pass across the given adapters (default: all).
    * Discovers new projects, enriches them with full details, and saves them to the store.
    */
@@ -126,6 +187,7 @@ export class ScraperEngine {
     errors: Array<{ platform: string; error: string }>;
   }> {
     await this.store.init();
+    await this.runCleanupIfDue();
     await this.retryPendingSync();
 
     let newProjectsFound = 0;

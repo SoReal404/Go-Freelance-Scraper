@@ -48,3 +48,30 @@ test('empty batch is a no-op', async () => {
   const store = new ProjectStore(join(dir, 'projects.json'));
   assert.deepEqual(await store.upsertMany([]), []);
 });
+
+test('pruneOlderThan removes projects older than threshold and updates seenKeys', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'store-'));
+  const store = new ProjectStore(join(dir, 'projects.json'));
+
+  const now = Date.now();
+  const freshDate = new Date(now - 1 * 24 * 60 * 60 * 1000); // 1 day old
+  const oldDate = new Date(now - 5 * 24 * 60 * 60 * 1000); // 5 days old
+
+  await store.upsertMany([
+    project('fresh', { postedAt: freshDate, firstSeenAt: freshDate }),
+    project('old', { postedAt: oldDate, firstSeenAt: oldDate }),
+  ]);
+
+  assert.equal(store.has('mostaql', 'fresh'), true);
+  assert.equal(store.has('mostaql', 'old'), true);
+
+  const pruned = await store.pruneOlderThan(3); // threshold 3 days
+  assert.equal(pruned, 1, 'should prune 1 old project');
+
+  assert.equal(store.has('mostaql', 'fresh'), true, 'fresh project remains in seenKeys');
+  assert.equal(store.has('mostaql', 'old'), false, 'old project removed from seenKeys');
+
+  const remaining = await store.readAll();
+  assert.equal(remaining.length, 1);
+  assert.equal(remaining[0].external_id, 'fresh');
+});

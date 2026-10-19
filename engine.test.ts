@@ -88,3 +88,31 @@ test('stop() ends the watch loop promptly', async () => {
   await loop;
   assert.ok(Date.now() - started < 2_000, 'loop should not wait out its tick delay');
 });
+
+test('runCleanupIfDue deletes old projects from database and local store', async () => {
+  let dbDeletedDays = -1;
+  const deleteMock = async (days: number) => {
+    dbDeletedDays = days;
+    return { deleted: 5 };
+  };
+
+  const dir = await mkdtemp(join(tmpdir(), 'engine-cleanup-'));
+  const store = new ProjectStore(join(dir, 'projects.json'));
+
+  const oldDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+  await store.upsertMany([{ ...make('old-1'), postedAt: oldDate, firstSeenAt: oldDate }]);
+  assert.equal(store.has('freelancer', 'old-1'), true);
+
+  const engine = new ScraperEngine({
+    adapters: [adapterOf([])],
+    store,
+    maxProjectAgeDays: 3,
+    deleteOldProjects: deleteMock as any,
+    syncProjects: async () => ({ ok: 0, failed: 0, skipped: 0, failedProjects: [] }),
+    onLog: () => {},
+  });
+
+  const res = await engine.runSingleCycle();
+  assert.equal(dbDeletedDays, 3, 'invoked database delete with 3 days');
+  assert.equal(store.has('freelancer', 'old-1'), false, 'pruned old project from local store');
+});
