@@ -5,6 +5,8 @@ import type { PlatformId } from './adapters/index.ts';
 import { ScraperEngine } from './engine.ts';
 import { defaultStore, fromStoredProject } from './storage/project-store.ts';
 import { upsertProjectsBatch, deleteProjectsOlderThan } from './storage/supabase-store.ts';
+import { evaluateProject } from './alerts/matcher.ts';
+import { sendTelegramAlert } from './alerts/telegram.ts';
 
 function printHelp() {
   console.log(`
@@ -36,6 +38,10 @@ Environment Variables:
   SCRAPE_POLL_SECONDS     Poll interval for scraped sites (default 300, minimum 120)
   MIN_REQUEST_GAP_MS      Minimum gap between requests to the same host (default 3000)
   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   Database sync (server-side key, never the anon key)
+  TELEGRAM_BOT_TOKEN      Telegram Bot token for instant match alerts
+  TELEGRAM_CHAT_ID        Telegram Chat ID to receive instant alerts
+  MIN_MATCH_SCORE         Minimum keyword match score to alert (default: 4)
+  MIN_PROJECT_BUDGET      Minimum project budget in USD to alert (default: 15)
 
 Examples:
   # Check health of all platforms:
@@ -161,16 +167,39 @@ async function main() {
   const watch = args.includes('--watch');
   const once = args.includes('--once') || !watch;
 
+  const minMatchScore = process.env.MIN_MATCH_SCORE ? parseInt(process.env.MIN_MATCH_SCORE, 10) : 4;
+  const minProjectBudget = process.env.MIN_PROJECT_BUDGET ? parseInt(process.env.MIN_PROJECT_BUDGET, 10) : 15;
+  const telegramAlertsEnabled = Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
+
   console.log(`\n🚀 Initializing Go Freelance Engine...`);
   console.log(`   Configured platforms (${selectedAdapters.length}): ${selectedAdapters.map((a) => a.id).join(', ')}`);
   console.log(`   Detail enrichment (full descriptions/skills/budgets): ${enrichDetails ? 'Enabled' : 'Disabled'}`);
   console.log(`   Retention policy: Automatically deletes projects older than ${maxProjectAgeDays} days`);
+  console.log(`   Telegram Alerts: ${telegramAlertsEnabled ? 'Enabled' : 'Disabled (missing token or chat ID)'}`);
+  if (telegramAlertsEnabled) {
+    console.log(`   Alert Filter: Min Score >= ${minMatchScore}, Min Budget >= $${minProjectBudget}`);
+  }
   console.log(`   Mode: ${watch ? 'Continuous Watch' : 'Single Pass (--once)'}\n`);
 
   const engine = new ScraperEngine({
     adapters: selectedAdapters,
     enrichDetails,
     maxProjectAgeDays,
+    onNewProject: async (project) => {
+      const match = evaluateProject(project, { minScore: minMatchScore, minBudgetUsd: minProjectBudget });
+      if (match.matched) {
+        const time = new Date().toLocaleTimeString();
+        console.log(`[${time}] 🎯 SKILL MATCH (+${match.score}): "${project.title}" [${project.platform}]`);
+        if (telegramAlertsEnabled) {
+          const res = await sendTelegramAlert(project, match);
+          if (res.ok) {
+            console.log(`[${time}] 📲 Telegram notification dispatched!`);
+          } else {
+            console.warn(`[${time}] ⚠️ Telegram dispatch failed: ${res.error}`);
+          }
+        }
+      }
+    },
     onLog: (ev) => {
       const time = new Date().toLocaleTimeString();
       if (ev.event === 'new_project_detected') {
