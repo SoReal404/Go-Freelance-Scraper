@@ -122,7 +122,13 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
     }
 
     const data: any = await res.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    // Thinking models (e.g. gemini-3.8-flash) return multiple parts:
+    // parts[0] may be an empty "thought" part; parts[1] is the actual reply.
+    // Join all parts' text so we never silently drop the real response.
+    const content = (data.candidates?.[0]?.content?.parts ?? [])
+      .map((p: any) => p.text ?? '')
+      .join('')
+      .trim();
     if (!content) throw new Error('Gemini returned empty message content');
     return content;
   } finally {

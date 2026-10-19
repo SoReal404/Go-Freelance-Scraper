@@ -63,15 +63,28 @@ test('formatProjectMessage wraps proposal in tap-to-copy <pre><code> block', () 
 });
 
 test('generateProposal returns a proposal even without external API keys', async () => {
-  const project: NormalizedProject = {
-    platform: 'freelance-arabs',
-    externalId: '404',
-    title: 'مطلوب مبرمج لربط API',
-    url: 'https://freelancearabs.com/project/404',
-    skills: ['api'],
-    postedAt: new Date(),
-  };
+  // Temporarily clear AI keys so we always test the smart-template fallback path,
+  // regardless of what is set in the shell environment on CI / the EC2 server.
+  const savedOpenAI = process.env.OPENAI_API_KEY;
+  const savedGemini = process.env.GEMINI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.GEMINI_API_KEY;
 
-  const proposal = await generateProposal(project, mockMatch);
-  assert.ok(proposal.length > 50);
+  try {
+    const project: NormalizedProject = {
+      platform: 'freelance-arabs',
+      externalId: '404',
+      title: 'مطلوب مبرمج لربط API',
+      url: 'https://freelancearabs.com/project/404',
+      skills: ['api'],
+      postedAt: new Date(),
+    };
+
+    const proposal = await generateProposal(project, mockMatch);
+    assert.ok(proposal.length > 50, `Proposal too short (${proposal.length} chars): ${proposal}`);
+  } finally {
+    // Always restore, even if the assertion throws
+    if (savedOpenAI !== undefined) process.env.OPENAI_API_KEY = savedOpenAI;
+    if (savedGemini !== undefined) process.env.GEMINI_API_KEY = savedGemini;
+  }
 });
