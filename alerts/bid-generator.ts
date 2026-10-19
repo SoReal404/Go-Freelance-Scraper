@@ -97,7 +97,7 @@ async function callOpenAI(prompt: string, apiKey: string): Promise<string> {
  * Calls Google Gemini API if GEMINI_API_KEY is configured.
  */
 async function callGemini(prompt: string, apiKey: string): Promise<string> {
-  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 9000);
 
