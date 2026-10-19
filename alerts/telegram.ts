@@ -12,7 +12,16 @@ function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    // Backticks confuse Telegram's parser even inside HTML-mode <pre><code> blocks
+    .replace(/`/g, '&#96;');
+}
+
+/** Trim a message to Telegram's 4096-char hard limit, adding ellipsis if needed. */
+function truncateIfNeeded(text: string, limit = 4000): string {
+  return text.length > limit ? text.slice(0, limit) + '\n…' : text;
 }
 
 function formatBudget(p: NormalizedProject): string {
@@ -97,7 +106,7 @@ export async function sendTelegramAlert(
     }
   }
 
-  const text = formatProjectMessage(project, match, proposal);
+  const text = truncateIfNeeded(formatProjectMessage(project, match, proposal));
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
