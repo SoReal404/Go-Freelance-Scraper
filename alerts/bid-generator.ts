@@ -111,7 +111,13 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 350,
+          // 1024 tokens gives plenty of room for a 120-word proposal.
+          // Thinking models (gemini-3.8-flash etc.) charge thinking tokens
+          // against this limit, so 350 was too tight.
+          maxOutputTokens: 1024,
+          // Disable the model's "thinking" step: we want fast, complete prose,
+          // not a reasoning trace.  If the model ignores this field it's harmless.
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     });
