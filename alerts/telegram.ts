@@ -1,9 +1,11 @@
 import type { NormalizedProject } from '../adapters/types.ts';
 import type { MatchResult } from './matcher.ts';
+import { generateProposal } from './bid-generator.ts';
 
 export interface TelegramConfig {
-  botToken: string;
-  chatId: string | number;
+  botToken?: string;
+  chatId?: string | number;
+  proposal?: string;
 }
 
 function escapeHtml(str: string): string {
@@ -24,7 +26,11 @@ function formatBudget(p: NormalizedProject): string {
   return `${cur}${amt}${type}`;
 }
 
-export function formatProjectMessage(project: NormalizedProject, match: MatchResult): string {
+export function formatProjectMessage(
+  project: NormalizedProject,
+  match: MatchResult,
+  proposal?: string,
+): string {
   const platformName = project.platform.toUpperCase();
   const title = escapeHtml(project.title);
   const budget = formatBudget(project);
@@ -38,11 +44,11 @@ export function formatProjectMessage(project: NormalizedProject, match: MatchRes
 
   const rawDesc = project.listingDescription || project.description || '';
   const cleanDesc = rawDesc.replace(/\s+/g, ' ').trim();
-  const descSnippet = cleanDesc.length > 320
-    ? escapeHtml(cleanDesc.slice(0, 320)) + '…'
+  const descSnippet = cleanDesc.length > 250
+    ? escapeHtml(cleanDesc.slice(0, 250)) + '…'
     : escapeHtml(cleanDesc);
 
-  return [
+  const lines = [
     `🎯 <b>NEW MATCH DETECTED!</b> (Score: <b>+${match.score}</b>)`,
     ``,
     `💼 <b>Platform:</b> ${platformName}`,
@@ -52,9 +58,22 @@ export function formatProjectMessage(project: NormalizedProject, match: MatchRes
     ``,
     `📝 <b>Summary:</b>`,
     `<i>${descSnippet || 'No description provided.'}</i>`,
+  ];
+
+  if (proposal?.trim()) {
+    lines.push(
+      ``,
+      `📋 <b>AI Bid Proposal (Tap box to copy):</b>`,
+      `<pre><code>${escapeHtml(proposal.trim())}</code></pre>`,
+    );
+  }
+
+  lines.push(
     ``,
     `🔗 <a href="${url}"><b>Click here to view & apply on ${platformName} ↗</b></a>`,
-  ].join('\n');
+  );
+
+  return lines.join('\n');
 }
 
 export async function sendTelegramAlert(
@@ -69,7 +88,16 @@ export async function sendTelegramAlert(
     return { ok: false, error: 'TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured.' };
   }
 
-  const text = formatProjectMessage(project, match);
+  let proposal = config?.proposal;
+  if (proposal === undefined) {
+    try {
+      proposal = await generateProposal(project, match);
+    } catch (err: any) {
+      console.warn(`[Telegram] Proposal generation warning: ${err.message}`);
+    }
+  }
+
+  const text = formatProjectMessage(project, match, proposal);
 
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
