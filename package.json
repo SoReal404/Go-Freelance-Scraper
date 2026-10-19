@@ -13,7 +13,8 @@
     "stats": "node --experimental-strip-types cli.ts --stats",
     "test:batch2": "node --experimental-strip-types --test adapters/shoghlonline.test.ts adapters/nafezly.test.ts adapters/freelance-arabs.test.ts adapters/listing-tracker.test.ts",
     "test:mostaql-time": "node --experimental-strip-types --test adapters/mostaql.test.ts",
-    "sync": "node --experimental-strip-types cli.ts --sync"
+    "sync": "node --experimental-strip-types cli.ts --sync",
+    "smoke": "node --experimental-strip-types scripts/smoke-test.ts"
   },
   "dependencies": {
     "cheerio": "^1.1.2",
