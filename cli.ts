@@ -171,10 +171,11 @@ async function main() {
   const minProjectBudget = process.env.MIN_PROJECT_BUDGET ? parseInt(process.env.MIN_PROJECT_BUDGET, 10) : 15;
   const telegramAlertsEnabled = Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
 
+  const disableCleanup = process.env.DISABLE_CLEANUP === 'true';
   console.log(`\n🚀 Initializing Go Freelance Engine...`);
   console.log(`   Configured platforms (${selectedAdapters.length}): ${selectedAdapters.map((a) => a.id).join(', ')}`);
   console.log(`   Detail enrichment (full descriptions/skills/budgets): ${enrichDetails ? 'Enabled' : 'Disabled'}`);
-  console.log(`   Retention policy: Automatically deletes projects older than ${maxProjectAgeDays} days`);
+  console.log(`   Retention policy: ${disableCleanup ? '♾️  Keep projects forever (DISABLE_CLEANUP=true)' : `Auto-delete after ${maxProjectAgeDays} days`}`);
   console.log(`   Telegram Alerts: ${telegramAlertsEnabled ? 'Enabled' : 'Disabled (missing token or chat ID)'}`);
   if (telegramAlertsEnabled) {
     console.log(`   Alert Filter: Min Score >= ${minMatchScore}, Min Budget >= $${minProjectBudget}`);

@@ -96,10 +96,10 @@ async function callOpenAI(prompt: string, apiKey: string): Promise<string> {
 /**
  * Calls Google Gemini API if GEMINI_API_KEY is configured.
  */
-async function callGemini(prompt: string, apiKey: string): Promise<string> {
+async function callGemini(prompt: string, apiKey: string, timeoutMs = 15_000): Promise<string> {
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 9000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -223,7 +223,7 @@ export async function generateProposal(
       const geminiKey2 = process.env.GEMINI_API_KEY_2?.trim();
       if (geminiKey2) {
         try {
-          return await callGemini(prompt, geminiKey2);
+          return await callGemini(prompt, geminiKey2, 20_000); // longer timeout for fallback key
         } catch (err2: any) {
           console.warn(`[AI Bid] Gemini key-2 also failed (${err2.message}), using template...`);
         }
