@@ -90,8 +90,8 @@ export async function sendTelegramAlert(
   match: MatchResult,
   config?: TelegramConfig,
 ): Promise<{ ok: boolean; error?: string }> {
-  const token = config?.botToken || process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = config?.chatId || process.env.TELEGRAM_CHAT_ID;
+  const token = (config?.botToken || process.env.TELEGRAM_BOT_TOKEN)?.trim();
+  const chatId = (config?.chatId || process.env.TELEGRAM_CHAT_ID)?.toString().trim();
 
   if (!token || !chatId) {
     return { ok: false, error: 'TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured.' };
@@ -108,33 +108,52 @@ export async function sendTelegramAlert(
 
   const text = truncateIfNeeded(formatProjectMessage(project, match, proposal));
 
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'HTML',
-        disable_web_page_preview: false,
-      }),
-    });
+  // Retry up to 3 times on transient 5xx errors (e.g. 502 Bad Gateway)
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: 'HTML',
+          disable_web_page_preview: false,
+        }),
+      });
 
-    const data: any = await res.json();
-    if (!data.ok) {
-      const detail = data.description || 'Unknown Telegram API error';
-      if (data.error_code === 400 && detail.includes('chat not found')) {
-        console.warn(`\n⚠️  [Telegram] Chat not found! You must open https://t.me/GoFreelance_2_Bot and click /start first.\n`);
-      } else {
+      const data: any = await res.json();
+      if (!data.ok) {
+        const detail = data.description || 'Unknown Telegram API error';
+        if (data.error_code === 400 && detail.includes('chat not found')) {
+          console.warn(`\n⚠️  [Telegram] Chat not found! You must open https://t.me/GoFreelance_2_Bot and click /start first.\n`);
+          return { ok: false, error: detail };
+        }
+
+        // If it's a 502/503/504 Bad Gateway / Server error, retry before giving up
+        if (data.error_code >= 500 && attempt < maxAttempts) {
+          console.warn(`[Telegram] ${detail} (${data.error_code}), retrying attempt ${attempt + 1}/${maxAttempts} in 2s...`);
+          await new Promise((r) => setTimeout(r, 2000));
+          continue;
+        }
+
         console.error(`[Telegram] Error sending message:`, detail);
+        return { ok: false, error: detail };
       }
-      return { ok: false, error: detail };
-    }
 
-    return { ok: true };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Telegram] Network error sending alert:`, msg);
-    return { ok: false, error: msg };
+      return { ok: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < maxAttempts) {
+        console.warn(`[Telegram] Network error (${msg}), retrying attempt ${attempt + 1}/${maxAttempts} in 2s...`);
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      console.error(`[Telegram] Network error sending alert:`, msg);
+      return { ok: false, error: msg };
+    }
   }
+
+  return { ok: false, error: 'Telegram send failed after retries' };
 }

@@ -238,8 +238,8 @@ try {
 // ─── 7. Telegram ─────────────────────────────────────────────────────────────
 section('7 · Telegram Full Alert');
 
-const botToken = process.env.TELEGRAM_BOT_TOKEN;
-const chatId = process.env.TELEGRAM_CHAT_ID;
+const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+const chatId = process.env.TELEGRAM_CHAT_ID?.toString().trim();
 
 if (!botToken || !chatId) {
   fail('Telegram credentials missing', 'TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set');
