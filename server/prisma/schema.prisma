@@ -1,0 +1,28 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  password    String
+  name        String
+  skills      String    @default("[]")     // JSON array stored as string
+  description String    @default("")
+  plan        String    @default("trial")   // trial | free | pro
+  trialEndsAt DateTime?
+  aiBidsUsed  Int       @default(0)
+  aiBidsLimit Int       @default(2)
+  gmailAlerts Boolean   @default(false)
+  gmailEmail  String?
+  alertedIds  String    @default("[]")      // JSON array of alerted project IDs
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}

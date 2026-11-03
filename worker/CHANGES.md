@@ -1,5 +1,9 @@
 # Changes in this review
 
+## Telegram delivery
+- New projects now trigger Telegram notifications by default, even when they do not meet keyword or budget matching thresholds (`TELEGRAM_NOTIFY_ALL_NEW_PROJECTS=true`). Set it to `false` to restore match-only alerts.
+- Notifications prefer the enriched full description and include skills, budget, category when available, and the project link. Missing Telegram credentials are called out for each detected project in the console.
+
 ## Security
 - **Removed the hardcoded Freelancer.com OAuth token** from `adapters/freelancer.ts`. The token now comes only from `FREELANCER_OAUTH_TOKEN`. If that file was ever pushed to GitHub, treat the token as leaked and generate a new one.
 - **Supabase writes now use `SUPABASE_SERVICE_ROLE_KEY`** (server only). The anon key is public, so writing with it meant the table had to accept anonymous writes. SQL to make the table read-only for visitors is at the top of `storage/supabase-store.ts`.

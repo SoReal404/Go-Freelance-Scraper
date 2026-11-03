@@ -5,6 +5,8 @@ node_modules/
 data/run-logs/
 data/projects.json
 data/*.csv
+*.csv
+PROJECTS_SUMMARY.md
 
 .env.*
 !.env.example

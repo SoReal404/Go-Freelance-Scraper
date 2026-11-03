@@ -131,8 +131,15 @@ export class ScraperEngine {
   /**
    * Cleans up projects older than maxProjectAgeDays from both Supabase and local store.
    * Runs at most once every cleanupIntervalMs.
+   *
+   * Set DISABLE_CLEANUP=true in .env to skip all deletion entirely.
    */
   async runCleanupIfDue(): Promise<{ supabaseDeleted: number; localPruned: number }> {
+    // Honour the kill-switch: keep every project indefinitely when set.
+    if (process.env.DISABLE_CLEANUP === 'true') {
+      return { supabaseDeleted: 0, localPruned: 0 };
+    }
+
     const now = Date.now();
     if (now - this.lastCleanupAt < this.cleanupIntervalMs) {
       return { supabaseDeleted: 0, localPruned: 0 };
