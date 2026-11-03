@@ -183,7 +183,15 @@ I am ready to get started immediately. Feel free to send a message so we can dis
 }
 
 /**
- * Generates an AI bid proposal using OpenAI, Gemini, or smart fallback.
+ * Generates an AI bid proposal using OpenAI, Gemini (primary key),
+ * Gemini (secondary key), or smart-template fallback.
+ *
+ * The fallback chain is:
+ *   OPENAI_API_KEY → GEMINI_API_KEY → GEMINI_API_KEY_2 → smart template
+ *
+ * A 429 (rate-limit) on the primary Gemini key automatically tries the
+ * secondary key before giving up. The smart-template fallback always
+ * produces a usable proposal so the Telegram alert is ALWAYS sent.
  */
 export async function generateProposal(
   project: NormalizedProject,
@@ -191,29 +199,40 @@ export async function generateProposal(
 ): Promise<string> {
   const textToCheck = `${project.title || ''} ${project.description || ''}`;
   const lang = isArabic(textToCheck) ? 'ar' : 'en';
+  const prompt = buildPrompt(project, match, lang);
 
   // 1. Try OpenAI if configured
   const openaiKey = process.env.OPENAI_API_KEY?.trim();
   if (openaiKey) {
     try {
-      const prompt = buildPrompt(project, match, lang);
       return await callOpenAI(prompt, openaiKey);
     } catch (err: any) {
       console.warn(`[AI Bid] OpenAI failed (${err.message}), falling back...`);
     }
   }
 
-  // 2. Try Gemini if configured
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  if (geminiKey) {
+  // 2. Try primary Gemini key
+  const geminiKey1 = process.env.GEMINI_API_KEY?.trim();
+  if (geminiKey1) {
     try {
-      const prompt = buildPrompt(project, match, lang);
-      return await callGemini(prompt, geminiKey);
+      return await callGemini(prompt, geminiKey1);
     } catch (err: any) {
-      console.warn(`[AI Bid] Gemini failed (${err.message}), falling back...`);
+      console.warn(`[AI Bid] Gemini key-1 failed (${err.message}), trying key-2...`);
+
+      // 3. On any error (especially 429 rate-limit), try the secondary key
+      const geminiKey2 = process.env.GEMINI_API_KEY_2?.trim();
+      if (geminiKey2) {
+        try {
+          return await callGemini(prompt, geminiKey2);
+        } catch (err2: any) {
+          console.warn(`[AI Bid] Gemini key-2 also failed (${err2.message}), using template...`);
+        }
+      } else {
+        console.warn('[AI Bid] No GEMINI_API_KEY_2 set, using smart-template fallback.');
+      }
     }
   }
 
-  // 3. Fallback to smart template
+  // 4. Always-safe smart template — Telegram alert is never blocked
   return generateSmartTemplate(project, match);
 }
