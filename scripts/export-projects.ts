@@ -114,41 +114,91 @@ async function fetchFromSupabase(): Promise<ProjectRecord[]> {
 async function main() {
   console.log('\n🔍 Reading collected projects...');
 
-  // 1. Try reading from local JSON store
-  await defaultStore.init();
-  const localProjects = await defaultStore.readAll();
-  console.log(`📦 Found ${localProjects.length} projects in local JSON storage.`);
+  const projectsMap = new Map<string, ProjectRecord>();
 
-  let allProjects: ProjectRecord[] = localProjects.map((p) => ({
-    platform: p.platform,
-    external_id: p.external_id,
-    title: p.title,
-    description: p.description || p.listing_description || '',
-    url: p.project_url,
-    budget_min: p.budget.min,
-    budget_max: p.budget.max,
-    currency: p.budget.currency,
-    budget_type: p.budget.type,
-    skills: p.skills || [],
-    category: p.category,
-    language: p.language,
-    posted_at: p.posted_at,
-    details_enriched: p.details_enriched,
-  }));
-
-  // 2. If local store has no or few projects, pull from Supabase
-  if (allProjects.length === 0) {
-    const cloudProjects = await fetchFromSupabase();
-    if (cloudProjects.length > 0) {
-      console.log(`☁️ Retrieved ${cloudProjects.length} projects from Supabase.`);
-      allProjects = cloudProjects;
+  // 1. Load existing local projects if present
+  try {
+    await defaultStore.init();
+    const localProjects = await defaultStore.readAll();
+    console.log(`📦 Found ${localProjects.length} projects in local JSON storage.`);
+    for (const p of localProjects) {
+      projectsMap.set(`${p.platform}:${p.external_id}`, {
+        platform: p.platform,
+        external_id: p.external_id,
+        title: p.title,
+        description: p.description || p.listing_description || '',
+        url: p.project_url,
+        budget_min: p.budget?.min,
+        budget_max: p.budget?.max,
+        currency: p.budget?.currency,
+        budget_type: p.budget?.type,
+        skills: p.skills || [],
+        category: p.category,
+        language: p.language,
+        posted_at: p.posted_at,
+        details_enriched: p.details_enriched,
+      });
     }
+  } catch (err: any) {
+    console.warn('⚠️ Could not read local projects:', err.message);
   }
+
+  // 2. Fetch fresh projects from Supabase cloud
+  const cloudProjects = await fetchFromSupabase();
+  if (cloudProjects.length > 0) {
+    console.log(`☁️ Retrieved ${cloudProjects.length} projects from Supabase.`);
+    let newFromCloud = 0;
+    for (const p of cloudProjects) {
+      const key = `${p.platform}:${p.external_id}`;
+      if (!projectsMap.has(key)) newFromCloud++;
+      projectsMap.set(key, p);
+    }
+    console.log(`✨ Added/updated ${newFromCloud} new projects from Supabase cloud.`);
+  }
+
+  const allProjects = Array.from(projectsMap.values());
 
   if (allProjects.length === 0) {
     console.log('\n⚠️ No projects found locally or in Supabase.');
     console.log('Run the scraper first (or check that your Supabase connection has data).\n');
     return;
+  }
+
+  // 3. Update local projects.json so it is 100% in sync
+  try {
+    const jsonPath = resolve(__dirname, '..', 'data', 'projects.json');
+    const storedProjects = allProjects.map((p) => ({
+      platform: p.platform,
+      external_id: p.external_id,
+      title: p.title,
+      description: p.description,
+      project_url: p.url,
+      budget: {
+        min: p.budget_min,
+        max: p.budget_max,
+        currency: p.currency,
+        type: p.budget_type as any,
+      },
+      skills: p.skills,
+      category: p.category,
+      language: p.language,
+      posted_at: p.posted_at || new Date().toISOString(),
+      first_seen_at: p.posted_at || new Date().toISOString(),
+      details_enriched: p.details_enriched ?? false,
+      last_updated_at: new Date().toISOString(),
+    }));
+
+    const jsonDoc = {
+      schema_version: 1,
+      updated_at: new Date().toISOString(),
+      total_projects: storedProjects.length,
+      projects: storedProjects,
+    };
+
+    await writeFile(jsonPath, JSON.stringify(jsonDoc, null, 2), 'utf8');
+    console.log(`💾 Synced ${allProjects.length} projects to local JSON storage: ${jsonPath}`);
+  } catch (err: any) {
+    console.warn('⚠️ Could not update local projects.json:', err.message);
   }
 
   // 3. Build CSV content
